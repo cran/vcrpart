@@ -33,14 +33,13 @@
 
 plot.tvcm <- function(x, type = c("default", "coef", 
                            "simple", "partdep", "cv"),
-                      main = NULL, part = NULL,
+                      main, part = NULL,
                       drop_terminal = TRUE,
                       tnex = 1, newpage = TRUE, ask = NULL, 
                       pop = TRUE, gp = gpar(), ...) {
 
   ## checks
   type <- match.arg(type)
-  stopifnot(is.null(main) | is.character(main))
   stopifnot(is.logical(drop_terminal) && length(drop_terminal) == 1L)
   stopifnot(is.numeric(tnex) && length(tnex) == 1L)
   stopifnot(is.logical(newpage) && length(newpage) == 1L)
@@ -49,13 +48,15 @@ plot.tvcm <- function(x, type = c("default", "coef",
   
   if (type == "partdep") {
 
-      call <- list(as.name("panel_partdep"), object = quote(x), ask = ask, main = main)
-      call <- append(call, list(...))
-      mode(call) <- "call"
-      eval(call)
+    if (missing(main)) main <- NULL
+    call <- list(as.name("panel_partdep"), object = quote(x), ask = ask, main = main)
+    call <- append(call, list(...))
+    mode(call) <- "call"
+    eval(call)
 
   } else if (type == "cv") {
 
+    if (missing(main)) main <- NULL
     if (is.null(x$info$cv)) {
       warning("no information on cross validation.")
     } else {
@@ -65,29 +66,29 @@ plot.tvcm <- function(x, type = c("default", "coef",
   } else {
     
     ## tree plots
-
     if (is.null(part)) part <- seq_along(x$info$node)
     if (is.character(part)) {
-      levs <- LETTERS[seq_along(x$info$node)]
-      if (any(!part %in% levs)) stop("unknown 'part'.")
-      part <- which(part %in% levs)
+      part <- which(LETTERS[seq_along(x$info$node)] %in% part)
     } else if (is.numeric(part)) {
       part <- as.integer(part)
     } else {
       stop("'part' must be a 'character' or a 'integer'.")
     }
+    if (length(part) < 1L) stop("no valid 'part' specified.")
 
     ## whether an input is expected before plotting the next tree
     if (is.null(ask))
       ask <- ifelse(length(part) == 1L, FALSE, TRUE)
     
     ## repeat the title
-    if (is.null(main)) {
-      main <- tvcm_print_vclabs(x)
-      main <- main[part]
+    if (missing(main)) {
+      main <- tvcm_print_vclabs(x$info$formula)[part]
+    } else if (is.character(main)){
+      main <- rep(main, length.out = length(part))
     } else {
-        main <- rep(main, length.out = length(part))
+      main <- NULL
     }
+    
     ## terminal panel
     tp_fun <-
       switch(type,
@@ -99,8 +100,11 @@ plot.tvcm <- function(x, type = c("default", "coef",
              },
              "coef" = panel_coef,
              "simple" = panel_empty)
-    tp_args <-
+    tp_args <- if ("tp_args" %in% names(list(...))) {
+      list(...)$tp_args
+    } else {
       list(...)[names(list(...)) %in% names(formals(tp_fun))[-1]]
+    }
     tp_args$part <- part
     tp_args$gp <- gp
       
@@ -110,17 +114,30 @@ plot.tvcm <- function(x, type = c("default", "coef",
              "default" = node_inner,
              "coef" = node_inner,
              "simple" = node_inner)
-    ip_args <-
+    ip_args <- if ("ip_args" %in% names(list(...))) {
+      list(...)$ip_args
+    } else {
       list(...)[names(list(...)) %in% names(formals(ip_fun))[-1]]
+    }
+    
+    ## edge panel
+    ep_fun <- edge_default    
+    ep_args <- if ("ep_args" %in% names(list(...))) {
+      list(...)$ep_args
+    } else {
+      list(...)[names(list(...)) %in% names(formals(ep_fun))[-1]]
+    }
     
     ## other arguments
     dotargs <- list(...)[names(list(...)) %in% names(formals(plot.party))[-1]]
-          
+    dotargs <- dotargs[setdiff(names(dotargs), c("tp_args", "ip_args", "ep_args"))]
+    
     ## prepare call
     call <- list(name = as.name("plot.party"),
                  x = quote(x),
                  terminal_panel = quote(tp_fun), tp_args = quote(tp_args),
                  inner_panel = quote(ip_fun), ip_args = quote(ip_args),
+                 edge_panel = quote(ep_fun), ep_args = quote(ep_args),
                  drop_terminal = quote(drop_terminal), tnex = quote(tnex),
                  newpage = quote(newpage), main = quote(main[pid]),
                  pop = pop, gp = gp)
@@ -271,7 +288,7 @@ panel_get_main <- function(object, node, id, nobs) {
   if (id) rval <-
     paste(rval, paste(names(object)[id_node(node)], sep = ""))
   if (id && nobs) rval <- paste(rval, ": ", sep = "")
-  if (nobs) rval <- paste(rval, "nobs = ", node$info$dims["n"], sep = "")
+  if (nobs) rval <- paste(rval, "n = ", node$info$dims["n"], sep = "")
   return(rval)
 }
 
@@ -310,10 +327,12 @@ panel_coef <- function(object, parm = NULL,
       rval <- function(node) {
           pushViewport(viewport())
           grid.text("(no split)")
-          upViewport()
+          upViewport(2L)
       }
       return(rval)
   }
+
+  ## extract subset of coefficients
   if (is.null(parm)) parm <- colnames(coef)
   if (!is.list(parm)) parm <- list(parm)
   if (is.numeric(unlist(parm))) {
@@ -401,6 +420,7 @@ panel_coef <- function(object, parm = NULL,
   }
   
   ## population mean
+  meanCoef <- NULL
   if (mean) {
 
     mean_gp <- argsToList(mean_gp)
@@ -413,10 +433,6 @@ panel_coef <- function(object, parm = NULL,
       sum(weights(object))
     meanCoef <- colSums(coef * matrix(w, nrow(coef), ncol(coef)))
     meanCoef <- lapply(parm, function(trms) meanCoef[trms, drop = FALSE])
-    if (conf.int) {
-      meanSd <- sqrt(colSums(sd^2 * matrix(w, nrow(coef), ncol(coef))^2))
-      meanSd <- lapply(parm, function(trms) sqrt(meanSd[trms, drop = FALSE]))
-    }
   }
 
   qN <- qnorm(0.975)
@@ -459,63 +475,79 @@ panel_coef <- function(object, parm = NULL,
                     unit(plot_gp[[i]]$xlim[2], "native"), unit(0, "native"),
                     gp = gpar(col = "black"))
 
-      if (conf.int) {
-        
-        grid.segments(unit(1:ncol(coefList[[i]]), "native"),
-                      unit(coefList[[i]][as.character(id_node(node)),] -
-                           qN * sdList[[i]][as.character(id_node(node)),], "native"),
-                      unit(1:ncol(coefList[[i]]), "native"),
-                      unit(coefList[[i]][as.character(id_node(node)),] +
-                           qN * sdList[[i]][as.character(id_node(node)),], "native"),
-                      arrow = arrow(angle = conf.int_gp[[i]]$angle,
-                        length = conf.int_gp[[i]]$length, 
-                        ends = conf.int_gp[[i]]$ends,
-                        type = conf.int_gp[[i]]$type),
-                      gp = plot_gp[[i]]$gp)
-        
-        if (FALSE) {
-          
-          grid.segments(unit(1:ncol(coefList[[i]]), "native"),
-                        unit(meanCoef[[i]] - qN * meanSd[[i]], "native"),
-                        unit(1:ncol(coefList[[i]]), "native"),
-                        unit(meanCoef[[i]] + qN * meanSd[[i]], "native"),
-                        arrow = arrow(angle = conf.int_gp[[1]]$angle,
-                        length = conf.int_gp[[i]]$length, 
-                        ends = conf.int_gp[[i]]$ends,
-                        type = conf.int_gp[[i]]$type),
-                        gp = mean_gp[[i]]$gp)
+      subs <- coefList[[i]][as.character(id_node(node)),] >= plot_gp[[i]]$ylim[1L] &
+          coefList[[i]][as.character(id_node(node)),]<= plot_gp[[i]]$ylim[2L]
 
-        }
+      subsMean <- NULL
+      if (mean) {
+          subsMean <- meanCoef[[i]] > plot_gp[[i]]$ylim[1L] &
+              meanCoef[[i]] > plot_gp[[i]]$ylim[1L]
+      }
+
+      ## option 'conf.int = TRUE'
+      if  (conf.int) {
+
+        ## crop the lines
+        nCoef <- length(coefList[[i]][as.character(id_node(node)),])
+        endCi <- rep(conf.int_gp[[i]]$ends, length.out = nCoef)
+        lenCi <- rep(conf.int_gp[[i]]$length, length.out = nCoef)        
+        lwr <- coefList[[i]][as.character(id_node(node)),] -
+          qN * sdList[[i]][as.character(id_node(node)),]
+        endCi[lwr < plot_gp[[i]]$ylim[1L]] <- "last"
+        lwr[lwr < plot_gp[[i]]$ylim[1L]] <- plot_gp[[i]]$ylim[1L]
+        lwr[lwr > plot_gp[[i]]$ylim[2L]] <- NA
+        upr <- coefList[[i]][as.character(id_node(node)),] +
+          qN * sdList[[i]][as.character(id_node(node)),]
+        endCi[upr > plot_gp[[i]]$ylim[2L] & endCi == "last"] <- "none"
+        endCi[upr > plot_gp[[i]]$ylim[2L] & endCi == "both"] <- "first"
+        upr[upr > plot_gp[[i]]$ylim[2L]] <- plot_gp[[i]]$ylim[2]
+        upr[upr < plot_gp[[i]]$ylim[1L]] <- NA
+        subsCi <- !is.na(lwr) & !is.na(upr)
+        lenCi[endCi == "none"] <- 0
+        endCi[endCi == "none"] <- "both"
+        
+        ## plot
+        if (any(subsCi))
+          grid.segments(unit(which(subsCi), "native"),
+                        unit(lwr[subsCi], "native"),
+                        unit(which(subsCi), "native"),
+                        unit(upr[subsCi], "native"),
+                        arrow = arrow(angle = conf.int_gp[[i]]$angle,
+                          length = lenCi, 
+                          ends = endCi,
+                          type = conf.int_gp[[i]]$type),
+                        gp = plot_gp[[i]]$gp)
         
       }
       
+      ## option 'type = "p"'
       if (plot_gp[[i]]$type %in% c("p", "b")) {
           
-        if (mean) {
-          grid.points(unit(1:ncol(coefList[[i]]), "native"),
-                      unit(meanCoef[[i]], "native"),
+        if (mean && any(subsMean))
+          grid.points(unit(which(subsMean), "native"),
+                      unit(meanCoef[[i]][subsMean], "native"),
                       pch = mean_gp[[i]]$pch, gp = mean_gp[[i]]$gp)
-        }
         
-        grid.points(unit(1:ncol(coefList[[i]]), "native"),
-                    unit(coefList[[i]][as.character(id_node(node)),],
-                         "native"),
-                    pch = plot_gp[[i]]$pch, gp = plot_gp[[i]]$gp)
+        if (any(subs)) 
+          grid.points(unit(which(subs), "native"),
+                      unit(coefList[[i]][as.character(id_node(node)),][subs],
+                           "native"),
+                      pch = plot_gp[[i]]$pch, gp = plot_gp[[i]]$gp)
       }
-
       
+      ## option 'type = "l"'
       if (plot_gp[[i]]$type %in% c("l", "b")) {
-
-        if (mean) {
-          grid.lines(unit(1:ncol(coefList[[i]]), "native"),
-                     unit(meanCoef[[i]], "native"),
-                     gp = mean_gp[[i]]$gp)
-        }
         
-        grid.lines(unit(1:ncol(coefList[[i]]), "native"),
-                   unit(coefList[[i]][as.character(id_node(node)),],
-                        "native"),
-                   gp = plot_gp[[i]]$gp)
+        if (mean && any(subsMean)) 
+          grid.lines(unit(which(subsMean), "native"),
+                     unit(meanCoef[[i]][subsMean], "native"),
+                     gp = mean_gp[[i]]$gp)
+
+        if (any(subs))
+            grid.lines(unit(which(subs), "native"),
+                       unit(coefList[[i]][as.character(id_node(node)),][subs],
+                            "native"),
+                       gp = plot_gp[[i]]$gp)
       }
       
       if (id_node(node) == min(nodeids(object, terminal = TRUE))) {
@@ -558,3 +590,42 @@ panel_empty <- function(object, part = 1L, id = TRUE, nobs = TRUE, ...) {
   return(rval)
 }
 class(panel_empty) <- "grapcon_generator"
+
+edge_default <- function(obj, digits = 3, abbreviate = FALSE,
+                         justmin = Inf,
+                         just = c("alternate", "increasing", "decreasing", "equal")) {
+  meta <- obj$data
+  
+  justfun <- function(i, split) {
+    myjust <- if(mean(nchar(split)) > justmin) {
+      match.arg(just, c("alternate", "increasing", "decreasing", "equal"))
+    } else {
+      "equal"
+    }
+    k <- length(split)
+    rval <- switch(myjust,
+                   "equal" = rep.int(0, k),
+                   "alternate" = rep(c(0.5, -0.5), length.out = k),
+                   "increasing" = seq(from = -k/2, to =  k/2, by = 1),
+                   "decreasing" = seq(from =  k/2, to = -k/2, by = -1)
+                   )
+    unit(0.5, "npc") + unit(rval[i], "lines")
+  }
+  
+  ## panel function for simple edge labelling
+  function(node, i) {
+    split <- character_split(split_node(node), meta, digits = digits)$levels
+    y <- justfun(i, split)
+    split <- split[i]
+    ## try() because the following won't work for split = "< 10 Euro", for example.
+    if(any(grep(">", split) > 0) | any(grep("<", split) > 0)) {
+      tr <- suppressWarnings(try(parse(text = paste("phantom(0)", split)),
+                                 silent = TRUE))
+      if(!inherits(tr, "try-error")) split <- tr
+    }
+    grid.rect(y = y, gp = gpar(fill = "white", col = 0),
+              width = unit(1, "strwidth", split))
+    grid.text(split, y = y, just = "center")
+  }
+}
+class(edge_default) <- "grapcon_generator"

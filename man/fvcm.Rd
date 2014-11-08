@@ -3,7 +3,9 @@
 \alias{fvcm}
 \alias{fvcm_control}
 \alias{fvcolmm}
+\alias{fvcolmm_control}
 \alias{fvcglm}
+\alias{fvcglm_control}
 
 \title{Bagging and random forests based on \command{\link{tvcm}}}
 
@@ -16,14 +18,19 @@
 
 fvcm(..., control = fvcm_control())
 
-fvcolmm(..., family = cumulative(), control = fvcm_control())
-
-fvcglm(..., family, control = fvcm_control())
-
 fvcm_control(maxstep = 10, folds = folds_control("subsampling", 5),
              ptry = 1, ntry = 1, vtry = 5, 
-             alpha = 1.0, maxoverstep = Inf, ...)
+             alpha = 1.0, mindev = 0.0, ...)
 
+fvcolmm(..., family = cumulative(), control = fvcolmm_control())
+
+fvcolmm_control(maxstep = 10, folds = folds_control("subsampling", 5),
+                ptry = 1, ntry = 1, vtry = 5, alpha = 1.0, ...)
+
+fvcglm(..., family, control = fvcglm_control())
+
+fvcglm_control(maxstep = 10, folds = folds_control("subsampling", 5),
+               ptry = 1, ntry = 1, vtry = 5, mindev = 0, ...)
 }
 
 \arguments{
@@ -57,7 +64,7 @@ fvcm_control(maxstep = 10, folds = folds_control("subsampling", 5),
     iteration. If \code{0 < vtry < 1}, \code{ntry} is interpreted as the
     relative number of variables to select regarding the total number of
     variables of the corresponding term.} 
-  \item{maxoverstep, alpha}{These two parameters are merely specified to
+  \item{mindev, alpha}{These two parameters are merely specified to
     disable the default stopping rules for \command{\link{tvcm}}. See
     also \command{\link{tvcm_control}} for details.} 
 }

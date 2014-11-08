@@ -3,6 +3,7 @@
 \alias{tvcm-methods}
 \alias{coef.tvcm}
 \alias{coefficients.tvcm}
+\alias{depth.tvcm}
 \alias{extract}
 \alias{extract.tvcm}
 \alias{formula.tvcm}
@@ -23,6 +24,7 @@
 \alias{splitpath.tvcm}
 \alias{summary.tvcm}
 \alias{weights.tvcm}
+\alias{width.tvcm}
 
 \title{Methods for \command{\link{tvcm}} objects}
 
@@ -32,10 +34,12 @@
 \usage{
 \method{coef}{tvcm}(object, ...)
 
+\method{depth}{tvcm}(x, root = FALSE, ...)
+
 \method{extract}{tvcm}(object, what = c(
               "control", "model", 
               "nodes", "sctest", "p.value",
-              "lossgrid", "selected",
+              "devgrid", "cv", "selected",
               "coef", "sd", "var"),
         steps = NULL, ...)
 
@@ -53,10 +57,13 @@
 
 \method{summary}{tvcm}(object, ...)
 
+\method{width}{tvcm}(x, ...)
 }
 
 \arguments{
-  \item{object, tree}{an object of class \command{\link{tvcm}}.}
+  \item{object, tree, x}{an object of class \command{\link{tvcm}}.}
+  \item{root}{logical scalar. Should the root count be counted in
+    \code{depth}?} 
   \item{steps}{integer vector. The iteration steps from which
     information should be extracted.} 
   \item{newdata}{an optional data frame in which to look for variables 
@@ -89,6 +96,12 @@
   several information, such as the loss reduction of new splits during
   partitioning or the loss reduction of collapsing an inner node when
   pruning. 
+
+  \command{\link{summary}} computes summary statistics of the fitted model, 
+  including the estimated coefficients. The varying coefficient are printed
+  by means of a printed decision tree. Notice that in cases there is no split
+  for the varying coefficient, the average coefficient will be among the 
+  fixed effects.	
   
   Further undocumented, available methods are: \command{\link{fitted}},
   \command{\link{formula}}, \command{\link{getCall}},

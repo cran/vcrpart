@@ -1,7 +1,7 @@
 ##' -------------------------------------------------------- #
 ##' Author:          Reto Buergin
 ##' E-Mail:          reto.buergin@unige.ch, rbuergin@gmx.ch
-##' Date:            2014-09-07
+##' Date:            2014-10-14
 ##'
 ##' Description:
 ##' Random forests and bagging for the 'tvcm' algorithm.
@@ -22,6 +22,9 @@
 ##' - set 'ptry', 'vtry' and 'ntry' automatically (see Hastie)
 ##'
 ##' Last modifications:
+##' 2014-10-14: found bug in predict.tvcm: now the 'coefi'
+##'             matrices are ordered by the column names of
+##'             'coef'.
 ##' 2014-09-07: - improvment of predict.tvcm function
 ##'               - treated bugs for 'type = "coef"'
 ##'               - deal with ordinal responses in cases not
@@ -33,7 +36,7 @@
 ##' 2014-08-05: - changed specification for folds
 ##' -------------------------------------------------------- #
 
-fvcolmm <- function(..., family = cumulative(), control = fvcm_control()) {
+fvcolmm <- function(..., family = cumulative(), control = fvcolmm_control()) {
   mc <- match.call()
   mc[[1L]] <- as.name("fvcm")
   mc$fit <- "olmm"
@@ -43,12 +46,31 @@ fvcolmm <- function(..., family = cumulative(), control = fvcm_control()) {
 }
 
 
-fvcglm <- function(..., family, control = fvcm_control()) {
+fvcolmm_control <- function(maxstep = 10, folds = folds_control("subsampling", 5),
+                            ptry = 1, ntry = 1, vtry = 5, alpha = 1.0, ...) {
+
+  mc <- match.call()
+  mc[[1L]] <- as.name("fvcm_control")
+  mc$sctest <- TRUE
+  return(eval.parent(mc))
+}
+
+
+fvcglm <- function(..., family, control = fvcglm_control()) {
   mc <- match.call()
   mc[[1L]] <- as.name("fvcm")
   mc$fit <- "glm"
   if ("weights" %in% names(mc)) mc$weights <- list(...)$weights
   if ("offset" %in% names(mc)) mc$offset <- list(...)$offset
+  return(eval.parent(mc))
+}
+
+
+fvcglm_control <- function(maxstep = 10, folds = folds_control("subsampling", 5),
+                           ptry = 1, ntry = 1, vtry = 5, mindev = 0, ...) {
+
+  mc <- match.call()
+  mc[[1L]] <- as.name("fvcm_control")
   return(eval.parent(mc))
 }
 
@@ -110,7 +132,7 @@ fvcm <- function(..., control = fvcm_control()) {
 
 fvcm_control <- function(maxstep = 10, folds = folds_control("subsampling", 5),
                          ptry = 1, ntry = 1, vtry = 5,
-                         alpha = 1.0, maxoverstep = Inf, ...) {
+                         alpha = 1.0, mindev = 0.0, ...) {
 
   ## modify the 'papply' argument
   mc <- match.call()
@@ -123,7 +145,7 @@ fvcm_control <- function(maxstep = 10, folds = folds_control("subsampling", 5),
   ## combine the parameter to a list and disble cross validation and pruning 
   call <- list(maxstep = maxstep, folds = folds,
                ptry = ptry, ntry = ntry, vtry = vtry,
-               alpha = alpha, maxoverstep = Inf,
+               alpha = alpha, mindev = mindev,
                papply = papply, cv = FALSE, prune = FALSE)
   call <- appendDefArgs(call, list(...))
   
@@ -346,7 +368,7 @@ predict.fvcm <- function(object, newdata = NULL,
     coefi <- predict(object, newdata = newdata, type = "coef",
                      ranef = FALSE, na.action = na.pass, ...)
     if (!is.matrix(coefi)) coefi <- matrix(coefi, nrow = nrow(newdata))
-
+    
     ## acount for skipped categories
     if (object$info$fit == "olmm" && ncol(coefi) < ncol(coef)) {        
         subsiCols <- table(mf[folds[, i] > 0, yName]) > 0L
@@ -366,6 +388,9 @@ predict.fvcm <- function(object, newdata = NULL,
         colnames(coefi) <- colnamesi          
     }
 
+    ## order columns of coefi
+    coefi <- coefi[, intersect(colnames(coef), colnames(coefi)), drop = FALSE]
+    
     ## index matrix for valid entries
     subsi <- subs    
     if (oob) subsi[folds[,i] > 0L, ] <- FALSE

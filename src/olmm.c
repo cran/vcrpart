@@ -1,4 +1,5 @@
 #include "olmm.h"
+#include "utils.h"
 #include <Rmath.h>
 #include <R_ext/Utils.h>
 #include <R_ext/Lapack.h>
@@ -103,17 +104,6 @@ double olmm_GLink(double x, int link) {
   }
 }
 
-SEXP getListElement(SEXP list, const char *str) {
-  SEXP elmt = R_NilValue, 
-    names = getAttrib(list, R_NamesSymbol); 
-  for (int i = 0; i < length(list); i++)
-    if(strcmp(CHAR(STRING_ELT(names, i)), str) == 0) {
-      elmt = VECTOR_ELT(list, i);
-      break;
-    }
-  return elmt;
-}
-
 /**
  * ---------------------------------------------------------
  * Store a new parameter vector in a olmm object
@@ -204,15 +194,22 @@ SEXP olmm_update_marg(SEXP x, SEXP par) {
   R_CheckStack();
 
   /* numeric valued objects */
-  double *X = X_SLOT(x), *W = W_SLOT(x), 
-    *weights_obs = WEIGHTS_SLOT(x), *weights_sbj = WEIGHTSSBJ_SLOT(x),
-    *offset = OFFSET_SLOT(x), *eta = ETA_SLOT(x), 
-    *fixef = FIXEF_SLOT(x), *ranefCholFac = RANEFCHOLFAC_SLOT(x),
-    *logLik_sbj = LOGLIKSBJ_SLOT(x), *logLik = LOGLIK_SLOT(x), 
-    *score_obs = SCOREOBS_SLOT(x), *score_sbj = SCORESBJ_SLOT(x), 
+  double *X = X_SLOT(x),
+    *W = W_SLOT(x),
+    *weights_obs = WEIGHTS_SLOT(x),
+    *weights_sbj = WEIGHTSSBJ_SLOT(x),
+    *offset = OFFSET_SLOT(x), 
+    *eta = ETA_SLOT(x), 
+    *fixef = FIXEF_SLOT(x), 
+    *ranefCholFac = RANEFCHOLFAC_SLOT(x),
+    *logLik_sbj = LOGLIKSBJ_SLOT(x), 
+    *logLik = LOGLIK_SLOT(x), 
+    *score_obs = SCOREOBS_SLOT(x), 
+    *score_sbj = SCORESBJ_SLOT(x), 
     *score = SCORE_SLOT(x),
     *info = INFO_SLOT(x),
-    *ghw = GHW_SLOT(x), *ghx = GHX_SLOT(x), 
+    *ghw = GHW_SLOT(x), 
+    *ghx = GHX_SLOT(x), 
     *ranefElMat = RANEFELMAT_SLOT(x);
   R_CheckStack();
 

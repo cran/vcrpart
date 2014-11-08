@@ -49,7 +49,9 @@ export(
   predecor_control,
   estfun.olmm,
   gefp.olmm,
-  tvcm_control, 
+  tvcm_control,
+  tvcolmm_control,
+  tvcglm_control,
   tvcm,
   tvcolmm,
   tvcglm, 
@@ -57,7 +59,12 @@ export(
   fvcolmm,
   fvcglm,
   fvcm_control,
+  fvcolmm_control,
+  fvcglm_control,
   folds_control)
+
+## Exported methods for 'glm' class
+S3method(fixef, glm)
 
 ## Exported methods for 'fvcm' class
 S3method(fitted, fvcm)
@@ -109,6 +116,7 @@ S3method(print, otsplot)
 ## Exported methods for 'tvcm' class
 S3method(coef, tvcm)
 S3method(coefficients, tvcm)
+S3method(depth, tvcm)
 S3method(cvloss, tvcm)
 S3method(plot, cvloss.tvcm)
 S3method(print, cvloss.tvcm)
@@ -135,3 +143,4 @@ S3method(splitpath, tvcm)
 S3method(print, splitpath.tvcm)
 S3method(summary, tvcm)
 S3method(weights, tvcm)
+S3method(width, tvcm)

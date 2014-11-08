@@ -1,6 +1,6 @@
 ##' -------------------------------------------------------- #
 ##' Author:          Reto Buergin, rbuergin@gmx.ch
-##' Date:            2014-09-08
+##' Date:            2014-10-24
 ##'
 ##' Description:
 ##' methods for olmm objects.
@@ -40,6 +40,11 @@
 ##' weights:     Weights
 ##'
 ##' Modifications:
+##' 2014-10-24: - improve simulate.olmm
+##'             - improved 'estfun.olmm' call in 'gefp.olmm'
+##' 2014-10-23: - fix bug in predict.olmm
+##' 2014-09-22: - (internal) change 'Ninpute' to 'Nimpute' in estfun.olmm
+##' 2014-09-20: - use tile case in titles
 ##' 2014-09-08: - partial substitution of 'rep' by 'rep.int'
 ##'             - replace 'do.call' by 'call' in 'resid.olmm'
 ##' 2013-03-17: changed many methods to S3 methods (as in lme4)
@@ -52,6 +57,7 @@
 ##' - improve update method
 ##' - plot methods
 ##' - estfun.olmm: handle equal zero random effects
+##' - anova with a single model
 ##' -------------------------------------------------------- #
 
 anova.olmm <- function(object, ...) {
@@ -203,9 +209,10 @@ estfun.olmm <- function(x, predecor = FALSE, control = predecor_control(),
   parm <- seq_along(x$coefficients) # internal variable
   if (!is.null(nuisance) & is.character(nuisance))
     nuisance <- which(names(coef(x)) %in% nuisance)
+  nuisance <- sort(union(nuisance, which(x$restricted)))
   parm <- setdiff(parm, nuisance)
   attr <- list() # default attributes
-  
+
   scores <- x$score_obs
   subsImp <- rep.int(FALSE, nrow(scores))
 
@@ -215,19 +222,19 @@ estfun.olmm <- function(x, predecor = FALSE, control = predecor_control(),
   
   if (predecor && any(Ni != Nmax)) {
     
-    Ninpute <- Nmax - Ni
-    subsImp <- c(rep.int(FALSE, x$dims["n"]), rep.int(TRUE, sum(Ninpute)))
-    sbjImp <- factor(rep.int(names(Ni), Ninpute), names(Ni))
+    Nimpute <- Nmax - Ni
+    subsImp <- c(rep.int(FALSE, x$dims["n"]), rep.int(TRUE, sum(Nimpute)))
+    sbjImp <- factor(rep.int(names(Ni), Nimpute), names(Ni))
     ranef <- ranef(x)
     ranefImp <- ranef[rownames(ranef) %in% unique(sbjImp),,drop = FALSE]
 
     ## get predictors from empirical distribution
     yName <- all.vars(formula(x))[1L]
     yLevs <- levels(x$y)
-    newFrame <- x$frame[rep.int(1L, sum(Ninpute)),,drop=FALSE]
-    newFrame[, x$subjectName] <- rep.int(names(Ninpute), Ninpute)
-    newX <- x$X[rep.int(1L, sum(Ninpute)),,drop=FALSE]
-    newW <- x$W[rep.int(1L, sum(Ninpute)),,drop=FALSE]
+    newFrame <- x$frame[rep.int(1L, sum(Nimpute)),,drop=FALSE]
+    newFrame[, x$subjectName] <- rep.int(names(Nimpute), Nimpute)
+    newX <- x$X[rep.int(1L, sum(Nimpute)),,drop=FALSE]
+    newW <- x$W[rep.int(1L, sum(Nimpute)),,drop=FALSE]
 
     ## add imputations to model
     x$frame <- rbind(x$frame, newFrame)
@@ -239,10 +246,10 @@ estfun.olmm <- function(x, predecor = FALSE, control = predecor_control(),
       factor(c(as.character(x$subject), newFrame[, x$subjectName]),
              levels = names(Ni))
     x$weights <- x$weights_sbj[as.integer(x$subject)]
-    x$offset <- rbind(x$offset, matrix(0.0, sum(Ninpute), x$dims["nEta"]))
+    x$offset <- rbind(x$offset, matrix(0.0, sum(Nimpute), x$dims["nEta"]))
     x$dims["n"] <- nrow(x$frame)
-    x$eta <- rbind(x$eta, matrix(0.0, sum(Ninpute), x$dims["nEta"]))
-    x$score_obs <- rbind(x$score_obs, matrix(0.0, sum(Ninpute), x$dims["nPar"]))    
+    x$eta <- rbind(x$eta, matrix(0.0, sum(Nimpute), x$dims["nEta"]))
+    x$score_obs <- rbind(x$score_obs, matrix(0.0, sum(Nimpute), x$dims["nPar"]))    
 
     ## simulate responses
     if (control$impute) {
@@ -250,9 +257,10 @@ estfun.olmm <- function(x, predecor = FALSE, control = predecor_control(),
       if (control$verbose) cat("\n* impute scores ... ")
       
       ## set seed
+      if (!is.null(control$seed)) set.seed(control$seed)
 
       ## impute predictors
-      times <- Ninpute[x$subject[!subsImp]]
+      times <- Nimpute[x$subject[!subsImp]]
       rows <- unlist(tapply(1:sum(Ni), x$subject[!subsImp], function(x) sample(x, times[x[1L]], replace = TRUE)))
       x$frame[subsImp,] <- x$frame[rows,,drop=FALSE]
       x$X[subsImp, ] <- x$X[rows,,drop=FALSE]
@@ -268,7 +276,6 @@ estfun.olmm <- function(x, predecor = FALSE, control = predecor_control(),
                    ranef[as.integer(x$subject[subsImp])]) %*% tmatW
       eta <- etaFixef + etaRanef
       probs <- x$family$linkinv(eta)
-      if (!is.null(control$seed)) set.seed(control$seed)
       x$y[subsImp] <- # simulate responses
         ordered(apply(probs, 1L, function(x) sample(yLevs, 1L, prob = x)), yLevs)
       
@@ -370,9 +377,13 @@ gefp.olmm <- function(object, scores = NULL, order.by = NULL, subset = NULL,
   
   ## extract scores (if scores is not a matrix)
   if (is.null(scores)) {
-    estfunCall <- call(name = "estfun.olmm", x = quote(object), predecor = predecor)
-    dotargs <- list(...)[names(formals(estfun.olmm))]
-    for (arg in names(dotargs)) estfunCall[arg] <- dotargs[[arg]]
+    estfunCall <- list(name = as.name("estfun.olmm"),
+                       x = quote(object),
+                       predecor = quote(predecor))
+    dotargs <- list(...)
+    dotargs <- dotargs[intersect(names(formals(estfun.olmm)), names(dotargs))]
+    estfunCall[names(dotargs)] <- dotargs
+    mode(estfunCall) <- "call"
     scores <- try(eval(estfunCall))
   } else if (is.function(scores)) {    
     scores <- scores(object)
@@ -464,7 +475,7 @@ gefp.olmm <- function(object, scores = NULL, order.by = NULL, subset = NULL,
                lim.process = "Brownian bridge",
                type.name = "M-fluctuation test",
                order.name = deparse(substitute(order.by)),
-               subset <- rownames(model.frame(object))[subset & subsScores],
+               subset = rownames(model.frame(object))[subset & subsScores],
                J12 = NULL)
   class(rval) <- "gefp"
   return(rval)
@@ -525,7 +536,7 @@ predict.olmm <- function(object, newdata = NULL,
   if (type == "ranef") return(ranef(object, ...))
   
   if (type == "prob") type <- "response"
-  formList <- vcrpart_formula(formula(object)) # extract formulas
+  formList <- vcrpart_formula(formula(object), object$family) # extract formulas
   offset <- list(...)$offset
   subset <- list(...)$subset
   dims <- object$dims
@@ -563,13 +574,17 @@ predict.olmm <- function(object, newdata = NULL,
       ## fixed effects only
       getTerms <- function(x) attr(terms(x, keep.order = TRUE), "term.labels")
       terms <- lapply(formList$fe$eta, getTerms)
-      mfForm <- formula(paste("~", paste(unlist(terms), collapse = "+")))
+      if (length(unlist(terms)) > 0L) {
+        mfForm <- formula(paste("~", paste(unlist(terms), collapse = "+")))
+      } else {
+        mfForm <- ~ 1
+      }
     }
     mf <- model.frame(object)
     Terms <- delete.response(terms(mfForm))
     xlevels <- .getXlevels(attr(mf, "terms"), mf)
     xlevels <- xlevels[names(xlevels) %in%  all.vars(Terms)]
-    
+    xlevels <- xlevels[names(xlevels) != object$subjectName]
     newdata <- as.data.frame(model.frame(Terms, newdata,
                                          na.action = na.action,
                                          xlev = xlevels))    
@@ -607,7 +622,7 @@ predict.olmm <- function(object, newdata = NULL,
       rownames(W) <- rownames(newdata)
       
       ## check entered random effects
-      if (any(dim(ranef) != c(nlevels(subject), ncol(W))))
+      if (any(dim(ranef) != c(nlevels(subject), nrow(object$ranefCholFac))))
         stop("'ranef' matrix has wrong dimensions")
       
       if (any(!levels(subject) %in% rownames(ranef))) {
@@ -806,6 +821,23 @@ simulate.olmm <- function(object, nsim = 1, seed = NULL,
   if (!exists(".Random.seed", envir = .GlobalEnv)) runif(1) 
   RNGstate <- .Random.seed
   dotArgs$type <- "response"
+  if (is.logical(ranef) && ranef) {
+    if (object$subjectName %in% colnames(newdata)) {
+      subject <- droplevels(newdata[, object$subjectName])
+      ranef <- ranef(object)
+      if (any(!levels(subject) %in% rownames(ranef))) {
+        ranef <- matrix(rnorm(nlevels(subject) * ncol(ranef)),
+                        nrow = nlevels(subject), ncol = ncol(ranef),
+                        dimnames = list(levels(subject), colnames(ranef)))
+        ranef <- ranef %*% t(object$ranefCholFac)       
+      } else {
+        ranef <- ranef[rownames(ranef) %in% levels(subject),,drop = FALSE]
+      }
+    } else {
+      stop(paste("'newdata' must contain a column '",
+                 object$subjectName, "'", sep = ""))
+    }
+  }
   pred <- predict(object, newdata = newdata, type = "prob", ranef = ranef, ...)
   FUN <- function(x) sample(levels(object$y), 1, prob = x)
   rval <- as.data.frame(replicate(nsim, apply(pred, 1L, FUN)))
@@ -884,14 +916,14 @@ summary.olmm <- function(object, etalab = c("int", "char", "eta"),
     VarCorr <-
       matrix(, 0L, 3L, dimnames = list(c(), c("Variance", "StdDev", "")))
   }
-  
+
   ## title
-  methTitle <- "Ordinal linear"
-  if (dims["hasRanef"] > 0L) methTitle <- paste(methTitle, "mixed")
-  methTitle <- paste(methTitle, "model")
+  methTitle <- "Ordinal Linear"
+  if (dims["hasRanef"] > 0L) methTitle <- paste(methTitle, "Mixed")
+  methTitle <- paste(methTitle, "Model")
   if (dims["hasRanef"] > 0L)
-    paste(methTitle, " fit by marginal maximum\n",
-          "likelihood with Gauss-Hermite quadrature", sep = "")
+    methTitle <- paste(methTitle, " fit by Marginal Maximum\n",
+                       "Likelihood with Gauss-Hermite Quadrature", sep = "")
 
   na.action <- naprint(attr(model.frame(object), "na.action"))
   na.action <- if (na.action == "") character() else paste("(", na.action, ")", sep = "")

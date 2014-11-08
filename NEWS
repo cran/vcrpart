@@ -1,9 +1,44 @@
+Changes in Version 0.2-2
+
+    o    Added seed option to 'tvcm_control'.
+
+    o    The new implementation clearly distinguishes between the two 
+         functions 'tvcolmm' and 'tvcolmm' with separate help files. 
+	 The general function 'tvcm' is still available.
+
+    o    Added convenience function 'tvcolmm_control' and 
+         'tvglm_control'.
+
+    o    Improvement for 'panel_coef': Points and lines surpassing
+         the boxes are now suppressed.
+
+    o    Added variable centering as default for split selection.
+
+    o    Redefinition of tuning parameters for 'tvcm'. The main 
+         tuning parameter is now 'cp'. See the help of 'tvcm' and 
+         'tvcm_control' for details. 
+
+    o    Added 'nimpute' argument for 'tvcm_control'.
+
+    o    Added detail section to the help page of 'tvcm_control'
+
+    o    Removed AIC table from 'print.tvcm' (AIC and BIC seem not
+         relevant measures for models fitted by 'tvcm').
+
+    o    Added 'PL' data set.
+
+    o    Removed bug for numeric estimation of covariance of 'olmm'
+         objects.
+
+    o    Added 'depth' and 'width' methods.
+
+
 Changes in Version 0.2-1
 
-    o   First CRAN release.
+    o    First CRAN release.
 
-    o   'tvcm' and 'fvcm' allow for multiple 'vc' terms, i.e. 
-        coefficient-specific partitions
+    o    'tvcm' and 'fvcm' allow for multiple 'vc' terms, i.e. 
+         coefficient-specific partitions
 
     o    Complete revision of syntaxes, argument names and  default 
          parameters. R commands for the former version 0.1-14 are 
