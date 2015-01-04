@@ -19,8 +19,8 @@ contr.wsum(x, weights = rep.int(1.0, length(x)))
 
 \details{
   Computes a contrast matrix similar to \command{\link{contr.sum}}. The
-  contrast for the last category are however weighted by the sum of
-  weights of each category.
+  reference category is however weighted by the sum of weights of the
+  other categories.
 }
 
 \value{A matrix with \code{nlevels(x)} rows and \code{nlevels(x)- 1}

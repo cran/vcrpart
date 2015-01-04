@@ -58,9 +58,10 @@
 \source{Austrian Social Security Database (ASSD). The data set is also available 
   from \url{https://sites.google.com/site/rafaellalive/research}}  
 
-\references{Lalive, R. and Zweimueller, J. (2009), How does parental leave affect 
-  fertility and return to work? Evidence from two natural experiments. 
-  \emph{The Quarterly Journal of Economics}.
+\references{Lalive, R. and J. Zweimueller (2009), Does Parental Leave
+  Affect Fertility and Return-to-Work? Evidence from Two Natural
+  Experiments. \emph{The Quarterly Journal of Economics} \bold{124}(3),
+  1363--1402.
 } 
 
 \keyword{datasets}
