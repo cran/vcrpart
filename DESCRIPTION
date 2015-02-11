@@ -2,7 +2,7 @@ Package: vcrpart
 Type: Package
 Title: Tree-Based Varying Coefficient Regression for Generalized Linear
         and Ordinal Mixed Models
-Version: 0.3-1
+Version: 0.3-2
 Date: 2015-01-04
 Authors@R: c(
   person("Reto", "Buergin", role = c("aut", "cre", "cph"), email = "rbuergin@gmx.ch"),
@@ -14,12 +14,11 @@ License: GPL (>= 2)
 Depends: R (>= 3.1.0), parallel, partykit
 Imports: stats, grid, graphics, methods, nlme, rpart, numDeriv, ucminf,
         zoo, sandwich, strucchange
-URL: http://vcrpart.wordpress.com,
-        https://r-forge.r-project.org/projects/traminer/
+URL: http://vcrpart.wordpress.com
 LazyLoad: yes
 NeedsCompilation: yes
-Packaged: 2015-01-04 10:34:57 UTC; reto
+Packaged: 2015-02-11 09:33:01 UTC; reto
 Author: Reto Buergin [aut, cre, cph],
   Gilbert Ritschard [ctb, ths]
 Repository: CRAN
-Date/Publication: 2015-01-04 12:46:23
+Date/Publication: 2015-02-11 11:36:38

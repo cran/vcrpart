@@ -44,12 +44,12 @@ olmm(formula, data, family = cumulative(),
 
     where \code{ce(x1)} specifies that the predictor \code{x1} has a 
     category-specific i.e. non-proportional odds effect and
-    \code{ge(x2)} has global i.e. proportional odds fixed effect, see
-    \command{\link{ge}}, resp. \command{\link{ce}}. Random effects are
-    specified within the \command{\link{re}} term, where the variable
-    \code{id} above behind the vertical bar \code{|} defines  the
-    subject i.e. cluster factor. Notice that only one subject factor is 
-    allowed.}   
+    \code{ge(x2)} that the predictor \code{x2} has global
+    i.e. proportional odds fixed effect, see \command{\link{ge}},
+    resp. \command{\link{ce}}. Random effects are specified within the
+    \command{\link{re}} term, where the variable \code{id} above behind
+    the vertical bar \code{|} defines the subject i.e. cluster
+    factor. Notice that only one subject factor is allowed. See details.}   
   \item{data}{an optional data frame with the variables
     in \code{formula}. By default the variables are taken from the 
     environment from which \code{olmm} is called.}
@@ -98,7 +98,21 @@ olmm(formula, data, family = cumulative(),
   The implementation adopts functions of the packages \pkg{statmod}
   (Novomestky, 2012) and \pkg{matrixcalc} (Smyth et al., 2014), which 
   is not visible for the user. The authors are grateful for these
-  codes. 
+  codes.
+
+  The \code{formula} argument specifies the model to be
+  fitted. Categorical regression models distinguish between global
+  effects (or proportional-odds effects), which are defined with
+  \command{\link{ge}} terms, and category-specific effects, which are
+  defined by \command{\link{ce}} terms. For undefined terms, the
+  function will use \command{\link{ge}} terms. Notice that this default
+  does not necessarily yield interpretable outputs. For example, for the
+  \command{\link{baseline}} model you may use only \command{\link{ce}}
+  terms, and you have to specifiy this manually. For
+  \command{\link{cumulative}} models it is at present not possible to
+  specifiy \command{\link{ce}} for the random effects component because
+  the internal, unconstraint integration would yield unusable predictor
+  values. 
 }
 
 \value{\command{\link{olmm}} returns an object of class
@@ -177,7 +191,7 @@ olmm(formula, data, family = cumulative(),
 
 \references{
   Agresti, A. (2010). \emph{Analysis of Ordinal Categorical Data} (2
-  ed.), Wiley.
+  ed.). New Jersey, USA: John Wiley & Sons.
   
   Hartzel, J., A. Agresti and B. Caffo (2001). Multinomial Logit Random
   Effect Models, \emph{Statistical Modelling} \bold{1}(2), 81--102.
@@ -190,8 +204,8 @@ olmm(formula, data, family = cumulative(),
   Models, \emph{Computational Statistics & Data Analysis} \bold{22}(5),
   537--557. 
 
-  Tutz, G. (2012). \emph{Regression for Categorical Data}, Cambridge
-  Series in Statistical and Probabilistic Mathematics.
+  Tutz, G. (2012). \emph{Regression for Categorical Data}. New York,
+  USA: Cambridge Series in Statistical and Probabilistic Mathematics.
 
   Novomestky, F. (2012). matrixcalc: Collection of Functions for 
   Matrix Calculations. R package version 1.0-3. URL 
@@ -216,7 +230,7 @@ olmm(formula, data, family = cumulative(),
 data(schizo)
 
 model.10.3.1 <-
-  olmm(imps79o ~ tx + sqrt(week) + tx * sqrt(week) + re(1|id),
+  olmm(imps79o ~ tx + sqrt(week) + re(1|id),
        data = schizo, family = cumulative())
 
 summary(model.10.3.1)
@@ -231,7 +245,7 @@ summary(model.10.3.1)
 data(movie)
 
 ## model with category-specific effects for "review"
-model.24.1 <- olmm(critic ~  ce(review) + re(1|movie, intercept = "ce"),
+model.24.1 <- olmm(critic ~ ce(review) + re(1|movie, intercept = "ce"),
                    data = movie, family = adjacent())
 
 summary(model.24.1)
