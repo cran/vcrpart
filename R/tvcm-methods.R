@@ -1,7 +1,7 @@
 ##' -------------------------------------------------------- #
 ##' Author:          Reto Buergin
-##' Date:            2014-10-18
-##' E-Mail:          reto.buergin@unige.ch, rbuergin@gmx.ch
+##' E-Mail:          rbuergin@gmx.ch
+##' Date:            2016-02-16
 ##'
 ##' Description:
 ##' S3 methods for tvcm objects
@@ -31,6 +31,9 @@
 ##' width:               width of trees
 ##' 
 ##' Modifications:
+##' 2016-02-16: changed titles for varying coefficients in 'tvcm_print'.
+##' 2016-01-10: changed 'neglokLik2.tvcm' to allow for subsets
+##' 2015-08-21: implemented changes to 'tvcm_formula' in 'prune.tvcm'.
 ##' 2014-10-18: added 'depth' and 'width' methods
 ##' 2014-10-14: adapt print.splitpath to new dev-grid structure
 ##' 2014-10-03: add option 'cv' to 'extract.tvcm'
@@ -168,7 +171,7 @@ model.frame.tvcm <- function(formula, ...) {
 
 
 neglogLik2.tvcm <- function(object, ...)
-  return(-2 * as.numeric(logLik(extract(object, "model"))))
+    return(neglogLik2(extract(object, "model"), ...))
 
 
 nobs.tvcm <- function(object, ...) nobs(extract(object, "model"), ...)
@@ -181,7 +184,8 @@ predict.tvcm <- function(object, newdata = NULL,
 
   ## match type
   type <- match.arg(type)
-
+  if (type == "prob") type = "response"
+  
   ## resolve conflicts with the 'ranef' argument
   if (!is.null(newdata) && is.logical(ranef) && ranef)
     stop("'ranef' should be 'FALSE' or a 'matrix' if 'newdata' is not 'NULL'.")
@@ -241,7 +245,8 @@ predict.tvcm <- function(object, newdata = NULL,
     rval <- cbind(fe, vc)
     terms <- unique(colnames(rval))
     rval <-
-      sapply(terms, function(x) rowSums(rval[, colnames(rval) == x, drop = FALSE]))
+      sapply(terms, function(x)
+          rowSums(rval[, colnames(rval) == x, drop = FALSE], na.rm = TRUE))
 
     vcparm <- unique(unlist(tvcm_get_vcparm(object)))
     parm <- union(colnames(rval), vcparm)
@@ -339,7 +344,7 @@ tvcm_print <- function(x, type = c("print", "summary"),
     
   class(terminal_panel) <- "grapcon_generator"
 
-  vcLabs <- tvcm_print_vclabs(x$info$formula)
+  vcLabs <- tvcm_print_vclabs(x$info$formula, TRUE)
 
   for (pid in seq_along(coef$vc)) {
     cat(paste("\nVarying Coefficient ", LETTERS[pid],
@@ -347,16 +352,17 @@ tvcm_print <- function(x, type = c("print", "summary"),
     x$node <- x$info$node[[pid]]
     print.party(x, terminal_panel = terminal_panel,
                 tp_args = list(partid = pid))
-    if (depth(x$info$node[[pid]]) == 0L && length(coef$vc[[pid]]) > 0L) {
-      if (type == "print") {
-        coefMat <- coef$vc[[pid]]
-      } else {
-        coefMat <- cbind("Estimate" = coef$vc[[pid]],
-                         "Std. Error" = as.double(sd$vc[[pid]]),
-                         "z value" = as.double(coef$vc[[pid]] / sd$vc[[pid]]))
-      }
-      print(coefMat, ...)
-    }
+    ## 2015-10-10: no more necessary???
+    ## if (depth(x$info$node[[pid]]) == 0L && length(coef$vc[[pid]]) > 0L) {
+    ##   if (type == "print") {
+    ##     coefMat <- coef$vc[[pid]]
+    ##   } else {
+    ##     coefMat <- cbind("Estimate" = coef$vc[[pid]],
+    ##                      "Std. Error" = as.double(sd$vc[[pid]]),
+    ##                      "z value" = as.double(coef$vc[[pid]] / sd$vc[[pid]]))
+    ##   }
+    ##   print(coefMat, ...)
+    ## }
   }
   
   ## print footer

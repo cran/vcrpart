@@ -1,7 +1,7 @@
 ##' -------------------------------------------------------- #
 ##' Author:      Reto Buergin
-##' E-Mail:      reto.buergin@unige.ch, rbuergin@gmx.ch
-##' Date:        2015-23-02
+##' E-Mail:      rbuergin@gmx.ch
+##' Date:        2015-12-28
 ##'
 ##' Description:
 ##' The 'tvcm' function
@@ -14,6 +14,10 @@
 ##' tvcm_control    control function for 'tvcm'
 ##'
 ##' Last modifications:
+##' 2015-12-28: added the argument 'fast' to 'tvcglm_control'.
+##' 2015-11-31: enable the setting 'mtry <- Inf'
+##' 2015-10-30: set default 'na.action = na.omit' on 'tvcm'
+##' 2015-06-01: - give a warning when no 'vc' terms are specified.
 ##' 2014-12-08: - enable 'sctest = FALSE' in 'tvcolmm_control'
 ##'             - remove checks on length of argument list, which is
 ##'               not necessary because R assigns the argument names
@@ -56,7 +60,7 @@
 ##' -------------------------------------------------------- #
 
 tvcolmm <- function(formula, data, family = cumulative(),
-                    weights, subset, offset, na.action,
+                    weights, subset, offset, na.action = na.omit,
                     control = tvcolmm_control(), ...) {
     mc <- match.call()
     mc[[1L]] <- as.name("tvcm")
@@ -97,7 +101,7 @@ tvcolmm_control <- function(alpha = 0.05, bonferroni = TRUE, minsize = 50,
 
 
 tvcglm <- function(formula, data, family,
-                   weights, subset, offset, na.action,
+                   weights, subset, offset, na.action = na.omit,
                    control = tvcglm_control(), ...) { 
     mc <- match.call()
     mc[[1L]] <- as.name("tvcm")
@@ -111,7 +115,7 @@ tvcglm <- function(formula, data, family,
 tvcglm_control <- function(minsize = 30, mindev = 2.0,
                            maxnomsplit = 5, maxordsplit = 9, maxnumsplit = 9,
                            cv = TRUE, folds = folds_control("kfold", 5),
-                           prune = cv, center = TRUE, ...) {
+                           prune = cv, fast = TRUE, center = fast, ...) {
   mc <- match.call()
   mc[[1L]] <- as.name("tvcm_control")
   mc$minsize <- minsize
@@ -122,14 +126,17 @@ tvcglm_control <- function(minsize = 30, mindev = 2.0,
   mc$cv <- cv
   mc$folds <- folds
   mc$prune <- prune
+  mc$fast <- fast
   mc$center <- center
+  if (fast && (!is.null(list(...)$lossfun)))
+      warning("the 'lossfun' argument will be ignored for the exhaustive search.")
   return(eval.parent(mc))
 }
 
 
 
 tvcm <- function(formula, data, fit, family, 
-                 weights, subset, offset, na.action,
+                 weights, subset, offset, na.action = na.omit,
                  control = tvcm_control(), ...) {
   
   ## get specified arguments
@@ -171,15 +178,18 @@ tvcm <- function(formula, data, fit, family,
   ## set formulas
   if (control$verbose) cat("OK\n* setting formulas ... ")
   if (any(grepl("Right", all.vars(formula)) | grepl("Left", all.vars(formula)) |
-          grepl("Node", all.vars(formula))))
+          grepl("Node", all.vars(formula)) | grepl("fTerm", all.vars(formula))))
   if (any(substr(all.vars(formula), 1, 4) == "Node"))
-    stop("'Node', 'Left' and 'Right' are reserved labeles and cannot be used as",
-         "substrings of variable names.")
+    stop("'Node', 'Left', 'Right' and 'fTerm' are reserved labels and cannot",
+         "be used as variable names (or substrings of).")
   env <- environment(eval.parent(mc$formula))
   formList <- vcrpart_formula(formula, family, env)
   nPart <- length(formList$vc)  
-  if (nPart < 1L) control$cv <- FALSE
-    
+  if (nPart < 1L) {
+      control$cv <- FALSE
+      warning("no 'vc' terms. Return a linear model")
+  }
+  
   direct <- any(sapply(formList$vc, function(x) x$direct))
   if (length(direct) == 0L) direct <- FALSE
   control$direct <- direct
@@ -206,16 +216,19 @@ tvcm <- function(formula, data, fit, family,
   if (!is.null(offset) & !is.null(model.offset(mf)))
       stop("duplicated specification of 'offset'.")
   if (!is.null(model.offset(mf))) offset <- model.offset(mf)
-  
+
   mcall <- list(name = as.name(fit),
-               formula = quote(ff$full),
-               family = quote(family),
-               data = quote(mf))
+                formula = quote(ff$full),
+                family = quote(family),
+                data = quote(mf))
+ 
   mce <- match.call(expand.dots = TRUE)
   dotargs <- setdiff(names(mce), names(mc))
   fitargs <-
-    switch(fit,olmm = union(names(formals(olmm)), names(formals(olmm_control))),
-           glm = union(names(formals(glm)), names(formals(glm.control))), "")
+    switch(fit,
+           olmm = union(names(formals(olmm)), names(formals(olmm_control))),
+           glm = union(names(formals(glm)), names(formals(glm.control))),
+           "")
   dotargs <- intersect(fitargs, dotargs)
   dotargs <- setdiff(dotargs, names(mcall))
   dotargs <- list(...)[dotargs]
@@ -232,12 +245,13 @@ tvcm <- function(formula, data, fit, family,
   etaVars <- unlist(lapply(formList$vc, function(x) {
     lapply(x$eta, function(x) all.vars(x))
   }))
+
   etaVars <- intersect(etaVars, colnames(model.frame(model))) 
   if (any(sapply(model.frame(model)[, etaVars, drop = FALSE], is.factor)))
-    stop("variables in 'by' of 'vc' terms must be numeric. ",
-         "Use 'model.matrix' to convert the categorical variables to ",
-         "numeric predictors.")
-
+      stop("variables in 'by' of 'vc' terms must be numeric. ",
+           "Use 'model.matrix' to manually convert the categorical variables to ",
+           "numeric predictors.")
+  
   ## set whether coefficient constancy tests are used    
   if (control$sctest) {
     if (nPart > 1L)
@@ -336,7 +350,7 @@ tvcm <- function(formula, data, fit, family,
     if (control$verbose) cat("\n* pruning ... ")
     tree <- prune(tree, cp = tree$info$cv$cp.hat, papply = control$papply)
     if (control$verbose) cat("OK")
-  }  
+  }
   
   if (control$verbose) {
     cat("\n\nFitted model:\n")
@@ -428,6 +442,10 @@ tvcm_control <- function(minsize = 30, mindev = ifelse(sctest, 0.0, 2.0),
   ## check hidden arguments
   mtry <- ifelse(is.null(list(...)$mtry), .Machine$integer.max,  list(...)$mtry)
   stopifnot(is.numeric(mtry) && length(mtry) == 1L && mtry > 0L)
+  if (mtry != round(mtry) && mtry < Inf) {
+      mtry <- as.integer(mtry)
+      warning("'mtry' was set to ", mtry)
+  }
   
   ## ensure backward compability
   if ("maxevalsplit" %in% names(list(...))) maxnumsplit <- list(...)$maxevalsplit
@@ -469,7 +487,7 @@ tvcm_control <- function(minsize = 30, mindev = ifelse(sctest, 0.0, 2.0),
                 papply.args = papply.args,
                 center = center,
                 verbose = verbose,
-                mtry = as.integer(mtry),     
+                mtry = mtry,     
                 parm = NULL, intercept = NULL,
                 seed = seed,
                 functional.factor = "LMuo",

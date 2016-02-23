@@ -1,11 +1,52 @@
+Changes in Version 0.4-1
+
+    o    Changed titles in 'panel_coef', 'tvcm.print' and 'tvcm.summary'
+
+    o    Add '...' to the 'VarCorr' method for 'olmm' objects to resolve
+         the warning since 'nlme' version 3.1-123. Removed 'rdig' argument.
+
+    o    Because of an internal bug the print method for 'fvcm' objects
+         printed always 'Bagging based varying coefficient model', even if
+	 'mtry < Inf'. Bug fixed. Thanks Michel Ballings for the hint.
+
+    o    In cases of 'mtry = Inf' the algorithm returned an error. Now
+         'mtry = Inf' is allowed.
+
+    o    In cases of 'mtry < Inf' the 'print.fvcm' shows now the set 'mtry'
+         parameter.
+
+    o    Improved the 'coef' method for models fitted with 'tvcm', 'tvcglm'
+         or 'tvcolmm'. 'by' variables of 'vc' terms without splits are not
+         anymore assigned to fixed i.e. main effects. 
+
+    o    Corrected internal bug of 'predict.fvcm'. Except for 'type = "coef"',
+         and models with 'family = gaussian()' or 'family = cumulative()',
+         predictions gave wrong results. Sorry.
+
+    o    The default setting for 'na.action' on 'tvcolmm', 'tvcglm', 'tvcm'
+         and 'olmm' is set to 'na.action = na.omit'. Thanks to the anonymous
+         referee of JSS.
+
+    o    Added the argument 'fast' to 'tvcglm_control'
+
+Changes in Version 0.3-3
+
+    o    Corrected issues with moderators with name 'x' in 'vc' terms. Thanks
+    	 Jonathan Williams for the hint.
+
+    o    Corrected issues in cases no 'vc' terms are specified in 'tvcm' or 
+         'fvcm'. In these cases there will be a warning message and a linear
+         model as specified in 'fit' will be returned. Correction carries over
+         to 'tvcglm', 'tvcolmm', 'fvcolmm' and 'fvcglm'.
+
 Changes in Version 0.3-3
 
     o    Replaced 'ptry', 'ntry' and 'vtry' parameters for random
-         selections of 'fvcm' by 'mtry', see 'fvcm_control'. 'mtry' 
-         specifies the number of random selections of combinations of
-         partition, node and variable.
+         selections of the 'fvcm' function by 'mtry', see the 'fvcm_control' 
+ 	 function. 'mtry' specifies the number of random selections of 
+	 combinations of partition, node and variable.
 
-    o    Removed internal bugs of 'tvcolmm' and 'tvglm' calls The 
+    o    Removed internal bugs of the 'tvcolmm' and 'tvglm' functions. The 
          changes have no consequences for the users. 
 
     o    Removed internal bugs in 'fvcm'.

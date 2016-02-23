@@ -20,13 +20,13 @@
 
 \usage{
 tvcglm(formula, data, family, 
-       weights, subset, offset, na.action, 
+       weights, subset, offset, na.action = na.omit, 
        control = tvcglm_control(), ...)
 
 tvcglm_control(minsize = 30, mindev = 2.0,
                maxnomsplit = 5, maxordsplit = 9, maxnumsplit = 9,
                cv = TRUE, folds = folds_control("kfold", 5),
-               prune = cv, center = TRUE, ...)
+               prune = cv, fast = TRUE, center = fast, ...)
 }
 
 \arguments{
@@ -46,7 +46,7 @@ tvcglm_control(minsize = 30, mindev = 2.0,
     be removed by a \code{-1} term, according to the desired
     interpretation of the model.} 
   \item{family}{the model family. An object of class
-    \command{\link{family.olmm}}.}   
+    \command{\link{family}}.}   
   \item{data}{a data frame containing the variables in the model.}
   \item{weights}{an optional numeric vector of weights to be used in the 
     fitting process.}
@@ -55,9 +55,11 @@ tvcglm_control(minsize = 30, mindev = 2.0,
   \item{offset}{this can be used to specify an a priori known component 
     to be included in the linear predictor during fitting.} 	
   \item{na.action}{a function that indicates what should happen if data 
-    contain \code{NA}s. See \command{\link{na.action}}.}
+    contain \code{NA}s. The default \code{na.action = na.omit} is
+    listwise deletion, i.e., observations with missings on any variable
+    are dropped. See \command{\link{na.action}}.}
   \item{control}{a list with control parameters as returned by
-    \command{\link{tvcolmm_control}}.}
+    \command{\link{tvcglm_control}}.}
   \item{minsize}{numeric (vector). The minimum sum of weights in
     terminal nodes.}
   \item{mindev}{numeric scalar. The minimum permitted training error 
@@ -74,7 +76,13 @@ tvcglm_control(minsize = 30, mindev = 2.0,
     \command{\link{folds_control}}. Is used for cross-validation.}
   \item{prune}{logical scalar. Whether or not the initial tree should be
     pruned by the estimated \code{cp} parameter from
-    cross-validation. Cannot be \code{TRUE} if \code{cv = FALSE}.} 
+    cross-validation. Cannot be \code{TRUE} if \code{cv = FALSE}.}
+  \item{fast}{logical scalar. Whether the approximative model should be
+    used to search for the next split. The approximative search model
+    uses only the observations of the node to split and incorporates the
+    fitted values of the current model as offsets. Therewith the
+    estimation is reduces to the coefficients of the added split. If
+    \code{FALSE}, the accurate search model is used.}
   \item{center}{logical integer. Whether the predictor variables of
     update models during the grid search should be centered. Note that
     \code{TRUE} will not modify the predictors of the fitted model.} 

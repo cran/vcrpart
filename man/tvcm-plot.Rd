@@ -15,7 +15,7 @@
 \method{plot}{tvcm}(x, type = c("default", "coef", 
         "simple", "partdep", "cv"),
      main, part = NULL, drop_terminal = TRUE,
-     tnex = 1, newpage = TRUE, ask = NULL,
+     tnex, newpage = TRUE, ask = NULL,
      pop = TRUE, gp = gpar(), ...)
 
 panel_partdep(object, parm = NULL,
@@ -25,10 +25,11 @@ panel_partdep(object, parm = NULL,
 
 panel_coef(object, parm = NULL, 
            id = TRUE, nobs = TRUE,
-           exp = FALSE, plot_gp = list(),
-           margins = c(3, 2, 0, 0), yadj = 0.1,
+           exp = FALSE,
+           plot_gp = list(),
+           margins, yadj = 0.1,
            mean = FALSE, mean_gp = list(),
-           conf.int = TRUE, conf.int_gp = list(),
+           conf.int = FALSE, conf.int_gp = list(),
            abbreviate = TRUE, etalab = c("int", "char", "eta"), ...)
 }
 
@@ -42,7 +43,8 @@ panel_coef(object, parm = NULL,
     should be plotted at the bottom. See also
     \command{\link{plot.party}}.} 
   \item{tnex}{a numeric value giving the terminal node extension in
-    relation to the inner nodes.}
+    relation to the inner nodes. By default the value is computed
+    adaptively to the tree size.}
   \item{newpage}{a logical indicating whether \code{grid.newpage()}
     should be called.}
   \item{pop}{a logical whether the viewport tree should be popped before
@@ -81,7 +83,8 @@ panel_coef(object, parm = NULL,
     graphical parameters for each list component of \code{parm}. See
     examples.} 
   \item{margins}{a numeric vector \code{c(bottom, left, top, right)}
-    specifying the space on the margins for each panel.}
+    specifying the space on the margins for each panel. By default
+    the values are computed adaptively to the tree size.}
   \item{yadj}{a numeric scalar larger than zero that increases the
     margin above the panel. May be useful if the edge labels are covered
     by the coefficient panels.} 
@@ -91,8 +94,8 @@ panel_coef(object, parm = NULL,
     coefficients. Includes a component \code{gp = gpar(...)} and a
     component \code{pch}. See examples.}
   \item{conf.int}{logical. Whether confidence intervals should be
-    visualized. Note that these intervals do not account for the error
-    of the algorithm,}
+    visualized. These are indicative values only. They do not account
+    for the uncertainty of model selection procedure.} 
   \item{conf.int_gp}{a list of graphical parameters for the confidence
     intervals applied to \command{\link{arrow}}. Includes \code{angle},
     \code{length}, \code{ends} and \code{type}. See examples.}

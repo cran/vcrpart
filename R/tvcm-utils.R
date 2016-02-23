@@ -1,10 +1,10 @@
 ##' -------------------------------------------------------- #
 ##' Author:          Reto Buergin
-##' E-Mail:          reto.buergin@unige.ch, rbuergin@gmx.ch
-##' Date:            2015-02-25
+##' E-Mail:          rbuergin@gmx.ch
+##' Date:            2016-02-08
 ##'
 ##' Description:
-##' Workhorse functions for the 'tvcm' function
+##' Workhorse functions for the 'tvcm' function.
 ##'
 ##' Overview:
 ##'
@@ -22,13 +22,14 @@
 ##' tvcm_setsplits_splitnode: 
 ##' tvcm_setsplits_rselect:   randomly select partitions, variables and nodes
 ##' tvcm_grow_sctest:         run coefficient constancy tests
-##' tvcm_grow_exsearch:     compute the dev statistics
+##' tvcm_grow_exsearch:       compute the 'dev' statistics
 ##' tvcm_grow_splitnode:      split in variable x.
 ##' tvcm_formula:             extract separate formulas for
 ##'                           model and partitioning from
 ##'                           input formula.
 ##' tvcm_grow_setcontrol:     update the control argument before
 ##'                           fitting the tree.
+##' tvcm_grow_setparm:        update the 'parm' slot
 ##'
 ##' Utility functions used by various functions:
 ##' tvcm_get_node:            extract node vectors and assign the contrasts
@@ -49,6 +50,13 @@
 ##' tvcm_grow_splitpath:      creates a 'splitpath.tvcm' object
 ##'
 ##' Last modifications:
+##' 2016-01-08: change in 'tvcm_grow_fit' to allow fitting the approximate
+##'             search modell locally. For now only for 'glm' fits!
+##' 2015-11-31: enable the setting 'mtry <- Inf'
+##' 2015-10-15: add function 'tvcm_grow_setparm'
+##' 2015-08-25: replace 'fit' argument in 'tvcm_formula' by 'family'.
+##' 2015-08-21: - small changes in 'tvcm_grow_fit'.
+##'             - replace 'family' argument in 'tvcm_formula' by 'fit'.
 ##' 2015-02-25: add check for fixed effects model matrix in 'tvcm_grow_update'.
 ##' 2015-02-24: - improved 'tvcm_getNumSplits' (bugs for the upper limits)
 ##' 2014-12-10: - added 'drop = FALSE' commands in 'tvcm_exsearch_nomToOrd'
@@ -132,6 +140,10 @@
 ##' - tvcm_grow_sctest
 ##' - tvcm_grow_setsplits
 ##' - tvcm_grow_exsearch
+##'
+##' To do:
+##' - fitting local models when 'fast = TRUE' for 'olmm'
+##'   objects
 ##' -------------------------------------------------------- #
 
 ##' -------------------------------------------------------- #
@@ -150,7 +162,7 @@ tvcm_complexity <- function(npar, dfpar, nsplit, dfsplit)
 
 
 ##' -------------------------------------------------------- #
-##' \code{\link{tvcm_grow_fit}} fits the current node model.
+##' Growing a 'tvcm' tree.
 ##'
 ##' @param object  a 'tvcm' object
 ##' @param subset  a vector indicating the subset on which
@@ -227,7 +239,7 @@ tvcm_grow <- function(object, subset = NULL, weights = NULL) {
       where[[pid]] <- factor(fitted_node(nodes[[pid]], partData))
       if (nlevels(where[[pid]]) > 1L)
       contrasts(where[[pid]]) <- contr.wsum(where[[pid]], weights)      
-      mf[, paste("Node", LETTERS[pid], sep = "")] <- where[[pid]]
+      mf[, paste0("Node", LETTERS[pid])] <- where[[pid]]
     }
     
     nodeid <- lapply(nodes, function(x) 1:width(x))
@@ -239,13 +251,13 @@ tvcm_grow <- function(object, subset = NULL, weights = NULL) {
     ## --------------------------------------------------- #
 
     vcRoot <- sapply(nodeid, length) == 1L
-    ff <- tvcm_formula(formList, vcRoot, model$family,
+    ff <- tvcm_formula(formList, vcRoot, family,
                        environment(formList$original))
     model <- try(tvcm_grow_fit(mcall))
     
     if (inherits(model, "try-error")) stop(model)
 
-    control <- tvcm_grow_setcontrol(control, model, formList, vcRoot)
+    control <- tvcm_grow_setcontrol(control, model, formList, vcRoot, TRUE)
 
     if (control$verbose) {
       cat("\n\nVarying-coefficient(s) of current model:\n")
@@ -276,7 +288,7 @@ tvcm_grow <- function(object, subset = NULL, weights = NULL) {
     }
 
     ## random selection (used by 'fvcm')
-    if (control$mtry < Inf)
+    if (control$mtry < .Machine$integer.max)
         splits <- tvcm_setsplits_rselect(splits, control)
     
     if (run > 0L && control$sctest) {
@@ -324,7 +336,7 @@ tvcm_grow <- function(object, subset = NULL, weights = NULL) {
           ## tests
           cat("\nCoefficient constancy tests (p-value):\n")   
           for (pid in seq_along(nodes)) {
-            cat(paste("\nPartition ", LETTERS[pid], ":\n", sep = ""))
+            cat(paste0("\nPartition ", LETTERS[pid], ":\n"))
             print(data.frame(format(testAdj[[pid]], digits = 2L)))              
           }
           
@@ -506,7 +518,7 @@ tvcm_grow <- function(object, subset = NULL, weights = NULL) {
 
 
 ##' -------------------------------------------------------- #
-##' \code{\link{tvcm_grow_fit}} fits the current node model.
+##' Avoid calling glm.fit if 'fit == FALSE'
 ##'
 ##' @param call    an object of class call
 ##' @param doFit   a logical indicating whether the parameters
@@ -550,14 +562,15 @@ tvcm_grow_fit <- function(mcall, doFit = TRUE) {
     
   ## extract information from 'mcall'
   env <- environment(mcall)
-
+  
   ## set mcall if coefficients are not to optimized
   if (!doFit) {
-    if (inherits(eval(mcall$family, env), "family.olmm")) {
-      mcall$doFit <- FALSE
-    } else {        
-      mcall$method <- glm.doNotFit # skips glm.fit
-    }
+      fit <- deparse(mcall$name)
+      if (fit == "olmm") {
+          mcall$doFit <- FALSE
+      } else if (fit == "glm") {        
+          mcall$method <- glm.doNotFit # skips glm.fit
+      } 
   }
   
   ## fit model
@@ -596,7 +609,7 @@ tvcm_grow_fit <- function(mcall, doFit = TRUE) {
 ##' Improve performance for non 'olmm' objects
 ##' -------------------------------------------------------- #
 
-tvcm_grow_update <- function(object, control) {
+tvcm_grow_update <- function(object, control, subs = NULL) {
   
   if (inherits(object, "olmm")) {
   
@@ -645,7 +658,7 @@ tvcm_grow_update <- function(object, control) {
       
       ## center the predictors
       object$X[,  c(cColsCe, cColsGe)] <-
-        scale(object$X[,  c(cColsCe, cColsGe)], center = TRUE, scale = TRUE)
+        scale(object$X[,  c(cColsCe, cColsGe)], center = TRUE, scale = FALSE)
     }
     
     ## prepare optimization
@@ -693,13 +706,24 @@ tvcm_grow_update <- function(object, control) {
         ## centering
         X[, cCols] <- scale(X[, cCols], center = TRUE, scale = TRUE)
     }
+
+    ## if 'fast = TRUE' model is fitted locally (thereby nuisance parameter is 
+    ## left as a free parameter)
+    if (!control$fast | is.null(subs)) subs <- rep(TRUE, nrow(X))
+    start <- if (control$fast) object$coefficients else NULL
     
+    ##subs <- rep(TRUE, nrow(X))
     
     object <- try(suppressWarnings(
-                    glm.fit(x = X, y = object$y, weights = object$prior.weights,
-                            start = object$coefficients, offset = object$offset,
-                            family = object$family, control = object$control,
+                    glm.fit(x = X[subs,,drop=FALSE], 
+                            y = object$y[subs], 
+                            weights = object$prior.weights[subs],
+                            start = start, 
+                            offset = object$offset[subs],
+                            family = object$family, 
+                            control = object$control,
                             intercept = TRUE)), TRUE)
+    
     if (!inherits(object, "try-error")) {
       class(object) <- c("glm", "lm")
       if (!object$conv) object <- try(stop("not converged"), TRUE)
@@ -1145,7 +1169,7 @@ tvcm_grow_sctest <- function(model, nodes, where, partid, nodeid, varid,
   rval <- vector("list", length(nodes))
   for (pid in seq_along(nodes)) {
     dim <- c(nlevels(where[[pid]]), length(varid[[pid]]), control$nimpute)
-    dn <- list(paste("Node", LETTERS[pid], levels(where[[pid]]), sep = ""),
+    dn <- list(paste0("Node", LETTERS[pid], levels(where[[pid]])),
                colnames(partData)[varid[[pid]]], 1:control$nimpute)
     rval[[pid]] <- array(, dim = dim, dimnames = dn)
   }
@@ -1170,9 +1194,15 @@ tvcm_grow_sctest <- function(model, nodes, where, partid, nodeid, varid,
                 parm = quote(cols), center = TRUE, silent = TRUE)
 
   terms <- # useful information to identify the coefficients to test
-    tvcm_get_terms(dimnames(scores)[[2L]],
-                   lapply(nodes, function(node) nodeids(node, terminal = TRUE)),
-                   control$parm)
+    tvcm_get_terms(
+        names = dimnames(scores)[[2L]],
+        ids = lapply(nodes, function(node) nodeids(node, terminal = TRUE)),
+        parm = control$parm,
+        fixed = NULL)
+  ## note: fixed is set to 'NULL' for the case where a variable that is at
+  ## the same time a fixed i.e. main effect and a 'by' variable in a 'vc'
+  ## term without split is not dropped (which is meaningful for the 'coef'
+  ## method)
   
   ## apply test for each variable and partition separately
   for (pid in seq_along(partid)) { # loop over partitions
@@ -1293,16 +1323,16 @@ tvcm_exsearch_nomToOrd <- function(cp, pid, nid, vid,
   ff <- mcall$formula
   aTerms <- attr(terms(ff),"term.labels")
   lTerms <- grep("Left",aTerms,value=TRUE)
-  ff <- update(ff,paste(".~.-",paste(aTerms,collapse="-")))
+  ff <- update(ff,paste(".~.-", paste(aTerms,collapse = "-")))
   lTerms <- unlist(lapply(levs, function(i) {
-    lapply(lTerms, function(t) sub("Left", paste("Left", i, sep = ""), t))
+    lapply(lTerms, function(t) sub("Left", paste0("Left", i), t))
   })) 
   ff <- update(ff,paste(".~+",paste(lTerms,collapse="+"),"+."))
   mcall$formula <- ff
   
   ## create a dummy for each category
   newdata <- as.data.frame(lapply(levs, function(i) 1 * (z == levels(z)[i])))
-  colnames(newdata) <- paste("Left", levs, sep = "")
+  colnames(newdata) <- paste0("Left", levs)
   mcall$data <- cbind(mcall$data, newdata)
   
   ## fit the model
@@ -1314,7 +1344,7 @@ tvcm_exsearch_nomToOrd <- function(cp, pid, nid, vid,
     st <- coef(model)
     stLabs <- strsplit(names(st), ":")
     stLabs <- sapply(stLabs, function(x) x[grep("Left[1-9]+", x)])
-    ind <- sapply(paste("Left", levs, sep = ""), function(x) which(stLabs == x))
+    ind <- sapply(paste0("Left", levs), function(x) which(stLabs == x))
     if (!is.matrix(ind)) ind <- matrix(ind, nrow = 1)
     ind <- t(ind)
     st <- matrix(st[c(ind)], nrow(ind), ncol(ind))
@@ -1346,7 +1376,8 @@ tvcm_exsearch_dev <- function(cutpoint,
                               modelNuis, startNuis, 
                               nuisance,
                               where, partData, 
-                              control, loss0, mfName) {
+                              control, loss0,
+                              mfName) {
       
   ## set node indicator
   subs <- where[[pid]] == levels(where[[pid]])[nid]
@@ -1361,26 +1392,45 @@ tvcm_exsearch_dev <- function(cutpoint,
     model[[mfName]]$Left <- 1 * (subs & zs)
     model[[mfName]]$Right <- 1 * (subs & !zs)
   } else {
-    model[[mfName]][subs & zs, paste("Node", LETTERS[pid], sep = "")] <- "Left"
-    model[[mfName]][subs & !zs, paste("Node", LETTERS[pid], sep = "")] <- "Right"
-    model[[mfName]][!subs, paste("Node", LETTERS[pid], sep = "")] <-
+    model[[mfName]][subs & zs, paste0("Node", LETTERS[pid])] <- "Left"
+    model[[mfName]][subs & !zs, paste0("Node", LETTERS[pid])] <- "Right"
+    model[[mfName]][!subs, paste0("Node", LETTERS[pid])] <-
       as.integer(droplevels(where[[pid]][!subs]))
   }
   model$coefficients <- vcrpart_copy(start)
-  model <- tvcm_grow_update(model, control)
+  eta0 <- model$offset
+  model <- tvcm_grow_update(model, control, subs)
   rval <- rep(NA, 2L)
   
-  if (!inherits(model, "try-error")) {
-    rval[1L] <- loss0 - control$lossfun(model)
-    rval[2L] <- length(coef(model)[grep("Right", names(coef(model)))])
+  if (!inherits(model, "try-error")) { # new from the 2016-01-10
+
+      dev.fast <- function(object, eta0) {
+          return(
+              sum(object$family$dev.resids(
+                  y = object$y,
+                  mu = object$family$linkinv(eta0),
+                  wt = object$prior.weights)) -
+                      sum(object$family$dev.resids(
+                          y = object$y,
+                          mu = object$family$linkinv(object$linear.predictors),
+                          wt = object$prior.weights)))
+      }
+      
+      rval[1] <- ifelse(inherits(model, "glm") & control$fast, 
+                        dev.fast(model, eta0[subs]),
+                        loss0 - control$lossfun(model))
+      rval[2L] <- length(coef(model)[grep("Right", names(coef(model)))])
     if (is.null(modelNuis)) {
       return(rval)
     } else {
       modelNuis[[mfName]]$Left <- 1 * (subs & zs)
       modelNuis[[mfName]]$Right <- 1 * (subs & !zs)
       modelNuis$coefficients <- vcrpart_copy(startNuis)
-      modelNuis <- tvcm_grow_update(modelNuis, control)
-      rval[1L] <- rval[1L] - (loss0 - control$lossfun(modelNuis))
+      modelNuis <- tvcm_grow_update(modelNuis, control, subs)
+      rval[1] <- rval[1L] -
+          ifelse(inherits(model, "glm") & control$fast,
+                 dev.fast(modelNuis, eta0[subs]),
+                 loss0 - control$lossfun(modelNuis))
       rval[2L] <- rval[2L] -
         length(coef(modelNuis)[grep("Right", names(coef(modelNuis)))])
       return(rval)
@@ -1390,18 +1440,21 @@ tvcm_exsearch_dev <- function(cutpoint,
   }
 }
 
+
 tvcm_grow_exsearch <- function(splits, partid, nodeid, varid, 
                                model, nodes, where, partData, 
                                control, mcall, formList, step) {
 
   verbose <- control$verbose; control$verbose <- FALSE;
-
   loss0 <- control$lossfun(model)
+  
   mfName <- switch(deparse(mcall[[1]]), glm = "model", olmm = "frame")
   
   if (verbose) cat("\n* computing splits ")
 
   mcall$data <- eval(mcall$data, environment(mcall))
+  nodeData <- mcall$data[paste0("Node", names(nodes))]
+  
   w <- weights(model)
 
   if (control$fast)
@@ -1424,13 +1477,13 @@ tvcm_grow_exsearch <- function(splits, partid, nodeid, varid,
     root <- sapply(nodes, width) == 1
   }
   
-  ff <- tvcm_formula(formList, root, 
+  ff <- tvcm_formula(formList, root,
                      eval(mcall$family, environment(mcall)),
                      environment(mcall), full = FALSE,
                      update = TRUE, fast = control$fast)
 
   Left <- sample(c(0, 1), nobs(model), replace = TRUE)
-  Right <- Left - 1
+  Right <- -(Left - 1)
   Node <- lapply(where, function(x) {
     levs <- c("Left", "Right", seq(1, nlevels(x) - 1, length.out = nlevels(x) - 1))
     return(factor(rep(levs, length.out = length(x)), levels = levs))
@@ -1441,9 +1494,11 @@ tvcm_grow_exsearch <- function(splits, partid, nodeid, varid,
      
       mcall$formula <- ff$update[[pid]][[1L]]
 
+      ## for 'control$fast = TRUE'
       mcall$data$Left <- Left
-      mcall$data$Right <- Right      
-      mcall$data[, paste("Node", LETTERS[pid], sep = "")] <- Node[[pid]]
+      mcall$data$Right <- Right
+      ## for 'control$fast = FALSE'
+      mcall$data[, paste0("Node", LETTERS[pid])] <- Node[[pid]]
 
       sModel <- tvcm_grow_fit(mcall, doFit = FALSE)
       sStart <- vcrpart_copy(sModel$coefficients)
@@ -1509,8 +1564,10 @@ tvcm_grow_exsearch <- function(splits, partid, nodeid, varid,
           }
         }
       }
-    }
   }
+    mcall$data[, paste0("Node", LETTERS[pid])] <-
+        nodeData[, paste0("Node", names(nodes)[pid])]  
+}
   
   ## extracts the penalized loss reduction
   pendev <- lapply(splits, function(part) {
@@ -1693,9 +1750,10 @@ tvcm_grow_splitnode <- function(nodes, where, dev, partData, step, weights) {
 ##'    \code{\link{tvcm}}.
 ##'-------------------------------------------------------- #
 
-tvcm_formula <- function(formList, root, family = cumulative(),
+tvcm_formula <- function(formList, root, family,
                          env = parent.frame(),
-                         full = TRUE, update = FALSE, fast = TRUE) {
+                         full = TRUE, update = FALSE,
+                         fast = TRUE) {
 
     
   yName <- rownames(attr(terms(formList$original), "factors"))[1L]
@@ -1713,7 +1771,7 @@ tvcm_formula <- function(formList, root, family = cumulative(),
       for (i in 1:length(root)) {
         if (root[i]) {
           vcTerms[[i]] <-
-            vcTerms[[i]][vcTerms[[i]] != paste("Node", LETTERS[i], sep = "")]
+            vcTerms[[i]][vcTerms[[i]] != paste0("Node", LETTERS[i])]
           vcTerms[[i]] <- gsub("Node[A-Z]:", "", vcTerms[[i]])    
         }
       }
@@ -1729,13 +1787,13 @@ tvcm_formula <- function(formList, root, family = cumulative(),
     
     rval <- ""
     if (length(vcTerms) > 0L)
-      rval <- paste(rval, paste(vcTerms, collapse = "+"), sep = "")
+      rval <- paste0(rval, paste(vcTerms, collapse = "+"))
     if (length(vcTerms) > 0L & length(feTerms) > 0L)
-      rval <- paste(rval, "+", sep = "")
+      rval <- paste0(rval, "+")
     if (length(feTerms) > 0L)
-      rval <- paste(rval, paste(feTerms, collapse = "+"), sep = "")
+      rval <- paste0(rval, paste(feTerms, collapse = "+"))
     if (rval != "" && inherits(family, "family.olmm"))
-      rval <- paste(effect, "(", rval, ")", sep = "")
+      rval <- paste0(effect, "(", rval, ")")
    
     return(c(vcTerms, feTerms))
   }
@@ -1760,19 +1818,17 @@ tvcm_formula <- function(formList, root, family = cumulative(),
       if (length(rval) == 0L) return(NULL)
       rval <- paste(rval, collapse = "+")
       if (inherits(family, "family.olmm"))
-        rval <- paste(effect, "(", rval, ")", sep = "")
+        rval <- paste0(effect, "(", rval, ")")
       return(rval)
     }
     reForm <- unlist(lapply(c("ce", "ge"), getReTerms))
     reForm <- paste(reForm, collapse = "+")
     if (inherits(family, "family.olmm")) {        
-      reForm <- paste("re(", reForm, "|", subjectName,
-                      ",intercept='", formList$re$intercept, "')", sep = "")
-    } else {        
-      if (formList$re$intercept == "none")
-        reForm <- paste(reForm, "-1", sep = "")
-      reForm <- paste("(", reForm, "|", subjectName, ")", sep = "")
-    }        
+      reForm <- paste0("re(", reForm, "|", subjectName,
+                      ",intercept='", formList$re$intercept, "')")
+    } else {
+        reForm <- NULL
+    }
   } else {
     reForm <- NULL
   }
@@ -1783,26 +1839,26 @@ tvcm_formula <- function(formList, root, family = cumulative(),
     
     feCeForm <- if (length(feCeTerms) == 0L) "" else paste(feCeTerms, collapse = "+")
     if (feCeForm != "" & inherits(family, "family.olmm"))
-      feCeForm <- paste("ce(", feCeForm, ")", sep = "")
+      feCeForm <- paste0("ce(", feCeForm, ")")
 
     feGeForm <- if (length(feGeTerms) == 0L) "" else paste(feGeTerms, collapse = "+")
-    if (feGeForm != "" &  inherits(family, "family.olmm"))
-      feGeForm <- paste("ge(", feGeForm, ")", sep = "")
+    if (feGeForm != "" & inherits(family, "family.olmm"))
+      feGeForm <- paste0("ge(", feGeForm, ")")
 
-    if (feCeForm != "") fTree <- paste(fTree, feCeForm, sep = "")
-    if (feCeForm != "" & feGeForm != "") fTree <- paste(fTree, " + ", sep = "")
-    if (feGeForm != "") fTree <- paste(fTree, feGeForm, sep = "")
+    if (feCeForm != "") fTree <- paste0(fTree, feCeForm)
+    if (feCeForm != "" & feGeForm != "") fTree <- paste0(fTree, " + ")
+    if (feGeForm != "") fTree <- paste0(fTree, feGeForm)
     if (fTree == "") fTree <- "1"
 
     if (inherits(family, "family.olmm")) {
-      fTree <- paste(fTree, ", intercept='", feInt, "'", sep = "")
+      fTree <- paste0(fTree, ", intercept='", feInt, "'")
     } else {
       if (feInt == "none")
         fTree <- paste("-1", fTree, sep = "+")
     }
     
     if (inherits(family, "family.olmm"))
-      fTree <- paste("fe(", fTree, ")", sep = "")
+      fTree <- paste0("fe(", fTree, ")")
 
     if (!is.null(reForm)) fTree <- paste(fTree, "+", reForm)
 
@@ -1835,7 +1891,7 @@ tvcm_formula <- function(formList, root, family = cumulative(),
     fUpdate <- vector("list", length(formList$vc))
     for (pid in seq_along(fUpdate)) {
       fUpdate[[pid]] <- vector("list", 2L)
-      nLab <- paste("Node", LETTERS[pid], sep = "")
+      nLab <- paste0("Node", LETTERS[pid])
 
       if (fast) {
         feIntTmp <- "none"
@@ -1876,18 +1932,17 @@ tvcm_formula <- function(formList, root, family = cumulative(),
 
 
 ##'-------------------------------------------------------- #
-##' Adds a new slot 'parm' to the 'control_tvcm' object
-##' for internal purposes.
+##' Update the 'control_tvcm' object for internal purposes.
 ##'
 ##' @param control  an object of class 'tvcm_control'.
 ##' @param model    a root node regression model, e.g., an 'olmm'
 ##'    or a 'glm' object
 ##' @param formList a list of formulas from 'vcrpart_formula'.
-##' 
+##' @param root parm.only
 ##'
 ##' @return An updated 'tvcm_control' object.
 ##'
-##' @details Used in 'tvcm'.
+##' @details Used in 'tvcm' and 'tvcm_grow'.
 ##'-------------------------------------------------------- #
 
 tvcm_grow_setcontrol <- function(control, model, formList, root, parm.only = TRUE) {
@@ -1914,65 +1969,92 @@ tvcm_grow_setcontrol <- function(control, model, formList, root, parm.only = TRU
       stop("'maxdepth' must be either of length ", 1L, " or ", npart, ".")
     control$maxdepth <- rep_len(control$maxdepth, npart)
   }
-  
-  ## update the 'parm' and the 'nuisance' slots
-  
-  ## set 'vcterms' slot
-  vcParm <- lapply(formList$vc, function(x) lapply(x$eta, function(x) attr(terms(x), "term.labels")))
-
-  for (pid in seq_along(vcParm)) {
-    for (j in names(vcParm[[pid]])) {
-      terms <- vcParm[[pid]][[j]]
-      if (root[pid]) {
-        terms <- terms[terms != paste("Node", LETTERS[pid], sep = "")]
-        terms <- gsub("Node[A-Z]:", "", terms)
-      }  
-      if (length(terms) > 0L) {
-        type <- paste("fe", j, sep = "-")
-        X <- model.matrix(model, which = type)
-        assign <- attr(X, "assign")
-        subs <- which(attr(terms(model, type), "term.labels") %in% terms)
-        if (length(subs) == 0L) {
-          terms <- sapply(terms, function(x) {
-            x <- strsplit(x, ":")[[1L]]
-            len <- length(x)
-            x <- c(if (len > 2) x[1:(len-2)], x[len], x[len-1])
-            return(paste(x, collapse = ":"))
-          })
-          subs <- which(attr(terms(model, type), "term.labels") %in% terms)
-        }
-        if (length(subs) > 0L) terms <- colnames(X)[assign %in% subs]
-      }
-      vcParm[[pid]][[j]] <- terms
-    }
-  }  
-  if (inherits(family, "family.olmm")) {
-    for (pid in seq_along(vcParm)) {
-      if ((len <- length(vcParm[[pid]][[1L]])) > 0L)
-        vcParm[[pid]][[1L]] <-
-          paste("Eta", rep(1L:model$dims["nEta"], each = len), ":",
-                rep(vcParm[[pid]][[1L]], model$dims["nEta"]), sep = "")
-    }
-  }  
-  control$parm <- vcParm
-  
-  ## set 'intercept' slot (which is always in the first 'vc' term)
-  if (control$direct && root[1L]) {
-    if (inherits(model, "olmm")) {
-      control$parm[[1L]]$ce <- c(grep("Eta[1-9]+:\\(Intercept\\)",
-                                      names(coef(model)), value = TRUE),
-                                 control$parm[[1L]]$ce)
-    } else {
-      control$parm[[1L]]$ce <- c("(Intercept)", control$parm[[1L]]$ce)
-    }
-  }
+    
+  ## update the 'parm' slot
+  control$parm <- tvcm_grow_setparm(model, formList, root, control$direct)
   
   ## set 'nuisance' slots
   control$nuisance <- lapply(formList$vc, function(x) x$nuisance)
   control$estfun.args$nuisance <-
     unique(c(control$estfun.args$nuisance,
-             setdiff(names(coef(model)), names(fixef(model)))))             
+             setdiff(names(coef(model)), names(fixef(model)))))
+
   return(control)
+}
+
+
+##'-------------------------------------------------------- #
+##' Update the 'parm' slot
+##'
+##' @param model a root node regression model, e.g., an 'olmm'
+##'    or a 'glm' object
+##' @param formList a list of formulas from 'vcrpart_formula'.
+##' @param root a logical vector. Indicates for each varying
+##'    coefficient whether there is at least one in the current
+##'    model.
+##' @param direct logical scalar. Whether there is a direct
+##'    effect defined.
+##'
+##' @return An updated 'tvcm_control' object.
+##'
+##' @details Used in 'tvcm_grow_setcontrol' and
+##'    'tvcm_get_estimates'.
+##'-------------------------------------------------------- #
+
+tvcm_grow_setparm <- function(model, formList, root, direct) {
+    
+    rval <- lapply(formList$vc, function(x) {
+        lapply(x$eta, function(x) attr(terms(x), "term.labels"))
+    })
+    
+    for (pid in seq_along(rval)) {
+        for (j in names(rval[[pid]])) {
+            terms <- rval[[pid]][[j]]
+            if (root[pid]) {
+                terms <- terms[terms != paste0("Node", LETTERS[pid])]
+                terms <- gsub("Node[A-Z]:", "", terms)
+            }  
+            if (length(terms) > 0L) {
+                type <- paste("fe", j, sep = "-")
+                X <- model.matrix(model, which = type)
+                assign <- attr(X, "assign")
+                subs <- which(attr(terms(model, type), "term.labels") %in% terms)
+                if (length(subs) == 0L) {
+                    terms <- sapply(terms, function(x) {
+                        x <- strsplit(x, ":")[[1L]]
+                        len <- length(x)
+                        x <- c(if (len > 2) x[1:(len-2)], x[len], x[len-1])
+                        return(paste(x, collapse = ":"))
+                    })
+                    subs <- which(attr(terms(model, type), "term.labels") %in% terms)
+                }
+                if (length(subs) > 0L) terms <- colnames(X)[assign %in% subs]
+            }
+            rval[[pid]][[j]] <- terms
+        }
+    }  
+    if (inherits(model$family, "family.olmm")) {
+        for (pid in seq_along(rval)) {
+            if ((len <- length(rval[[pid]][[1L]])) > 0L)
+                rval[[pid]][[1L]] <-
+                    paste0("Eta", rep(1L:model$dims["nEta"], each = len), ":",
+                          rep(rval[[pid]][[1L]], model$dims["nEta"]))
+        }
+    }
+
+    ## set the 'intercept' slot (which is always in the first 'vc' term)
+    if (direct && root[1L]) {
+        if (inherits(model$family, "family.olmm")) {
+            rval[[1L]]$ce <- c(grep("Eta[1-9]+:\\(Intercept\\)",
+                                    names(coef(model)), value = TRUE),
+                               rval[[1L]]$ce)
+        } else {
+            rval[[1L]]$ce <- c("(Intercept)", rval[[1L]]$ce)
+        }
+    }
+
+    ## return the list
+    return(rval)
 }
 
 
@@ -2004,7 +2086,7 @@ tvcm_get_fitted <- function(pid, object, newdata, weights, setContrasts) {
       contrasts(fitted) <- contr.wsum(fitted, weights)
     } else {
       contrasts(fitted) <-
-        object$contrasts[, paste("Node", LETTERS[pid], sep = "")]
+        object$contrasts[, paste0("Node", LETTERS[pid])]
     }
   }
   return(fitted)
@@ -2016,7 +2098,7 @@ tvcm_get_node <- function(object, newdata, setContrasts = FALSE, weights,
     formList <- vcrpart_formula(object$info$formula, object$info$family)
   fitted <- lapply(seq_along(object$info$node), tvcm_get_fitted, object = object,
                    newdata = newdata, weights = weights, setContrasts = setContrasts)
-  names(fitted) <- paste("Node", LETTERS[seq_along(object$info$node)], sep = "")
+  names(fitted) <- paste0("Node", LETTERS[seq_along(object$info$node)])
   return(fitted)
 }
 
@@ -2041,65 +2123,82 @@ tvcm_get_node <- function(object, newdata, setContrasts = FALSE, weights,
 ##'               belongs to.
 ##'-------------------------------------------------------- #
 
-tvcm_get_terms <- function(names, ids, parm) {
-  
-  parm <- lapply(parm, function(x) {
-    lapply(x, function(x) x[grepl("Node[A-Z]", x)])
-  })
-  
-  if (any(unlist(ids) == 1L)) {
-    getNames <- function(x) {
-      if (!x %in% unlist(parm)) return(x)
-      pid <- which(sapply(parm, function(p) x %in% unlist(p)))
-      if (grepl("(Intercept)", x))
-        return(gsub("(Intercept)", paste("Node", LETTERS[pid], 1, sep = ""),
-                    x, fixed = TRUE))
-      if (!grepl("Node", x)) {
-        x <- strsplit(x, ":")
-        x <- rep(x, length(pid))
-        subs <- ifelse(grepl("Eta[1-9]+", x[[1L]][1L]), 2L, 1L)
-        for (i in 1:length(x)) {
-          x[[i]][subs] <- paste("Node", LETTERS[pid[i]], 1, ":",
-                                x[[i]][subs], sep = "")
-          x[[i]] <- paste(x[[i]], collapse = ":")
+tvcm_get_terms <- function(names, ids, parm, fixed = NULL) {
+
+    ## modify 'parm':    
+    ## modification 1: remove 'by' variables of 'vc' terms
+    ## without splits in cases a corresponding fixed i.e. main effect
+    ## is specified for the same variable.
+    if (!is.null(fixed))
+        parm <- lapply(parm, lapply, function(x) setdiff(x, unlist(fixed)))
+    ## modification 2: remove duplicated variables that
+    ## appear as 'by' variables in multiple 'vc' terms without splits
+    ## By definition, such 'by' variables are assigned to the
+    ## corresponding first 'vc' term.
+    if (any(subs <- duplicated(unlist(parm)))) {
+        doubles <- unique(unlist(parm)[subs])
+        for (i in seq_along(doubles)) {
+            first <- which(sapply(parm, function(x) doubles[i] %in% unlist(x)))[1L]
+            parm <- lapply(parm[-first], lapply, function(x) setdiff(x, doubles[i]))
         }
-      }
-      return(x)
     }
-    names <- unlist(lapply(names, getNames))
-  }
-  
-  nodes <- unlist(lapply(seq_along(ids), function(i)
-                         paste("Node", names(ids)[i], ids[[i]], sep = "")))
-  split <- strsplit(names, ":")
-  type <-
-    sapply(split, function(x) {
-      rval <- "fe"
-      if (any(x %in% nodes)) rval <- "vc"
-      if (any(substr(x, 1, 12) %in% "ranefCholFac")) rval <- "re"
-      return(rval)
-    })
-  terms <-
-    sapply(split, function(x) {
-        paste(x[!x %in% nodes], collapse = ":")
-    })
-  node <- 
-    sapply(split, function(x) {
-      rval <- ""
-      if (any(subs <- x %in% nodes))
-        rval <- substr(x[subs], 6, 500)
-      return(rval)
-    })
-  partition <-
-    sapply(split, function(x) {
-      rval <- ""
-      if (any(subs <- x %in% nodes))
-        rval <- substr(x[subs], 5, 5)
-      return(rval)
-    })
-  return(list(names = names, 
-              terms = terms, type = type,
-              node = node, partition = partition))
+    
+    ## change 'names' if no split was applied in some node
+    if (any(unlist(ids) == 1L)) {
+        getNames <- function(x) {           
+            if (!x %in% unlist(parm)) return(x)
+            pid <- which(sapply(parm, function(p) x %in% unlist(p)))            
+            if (grepl("(Intercept)", x))
+                return(gsub("(Intercept)", paste0("Node", LETTERS[pid], 1),
+                            x, fixed = TRUE))
+            if (!grepl("Node", x)) {
+                x <- strsplit(x, ":")
+                x <- rep(x, length(pid))
+                subs <- ifelse(grepl("Eta[1-9]+", x[[1L]][1L]), 2L, 1L)
+                for (i in 1:length(x)) {
+                    x[[i]][subs] <-
+                        paste0("Node", LETTERS[pid[i]], 1, ":", x[[i]][subs])
+                    x[[i]] <- paste(x[[i]], collapse = ":")
+                }
+            }
+            return(x)
+        }
+        names <- unlist(lapply(names, getNames))
+    }
+    
+    nodes <- unlist(lapply(seq_along(ids), function(i)
+        paste0("Node", names(ids)[i], ids[[i]])))
+    split <- strsplit(names, ":")
+    type <-
+        sapply(split, function(x) {
+            rval <- "fe"
+            if (any(x %in% nodes)) rval <- "vc"
+            if (any(substr(x, 1, 12) %in% "ranefCholFac")) rval <- "re"
+            return(rval)
+        })
+    terms <-
+        sapply(split, function(x) {
+            paste(x[!x %in% nodes], collapse = ":")
+        })
+    node <- 
+        sapply(split, function(x) {
+            rval <- ""
+            if (any(subs <- x %in% nodes))
+                rval <- substr(x[subs], 6, 500)
+            return(rval)
+        })
+    partition <-
+        sapply(split, function(x) {
+            rval <- ""
+            if (any(subs <- x %in% nodes))
+                rval <- substr(x[subs], 5, 5)
+            return(rval)
+        })
+    return(list(names = names, 
+                terms = terms,
+                type = type,
+                node = node,
+                partition = partition))
 }
 
 
@@ -2121,7 +2220,7 @@ tvcm_get_vcparm <- function(object) {
       parmCe <- all.vars(etaList$fe$eta$ce)
       if (length(parmCe) > 0L) {
         parmCe <-
-          paste("Eta", 1:object$info$model$dims["nEta"], ":", parmCe, sep = "")
+          paste0("Eta", 1:object$info$model$dims["nEta"], ":", parmCe)
       } else {
         parmCe <- NULL
       }
@@ -2136,8 +2235,8 @@ tvcm_get_vcparm <- function(object) {
     int <- object$info$formula$vc[[pid]]$intercept
     if (inherits(object$info$model, "olmm")) {
       if (int == "ce") {
-        parm[[pid]] <- c(paste("Eta", 1:object$info$model$dims["nEta"],
-                               ":(Intercept)", sep = ""), parm[[pid]])
+        parm[[pid]] <- c(paste0("Eta", 1:object$info$model$dims["nEta"],
+                               ":(Intercept)"), parm[[pid]])
       } else if (int == "ge") {
         parm[[pid]] <- c("(Intercept)", parm)
       }
@@ -2166,107 +2265,126 @@ tvcm_get_vcparm <- function(object) {
 ##'-------------------------------------------------------- #
 
 tvcm_get_estimates <- function(object, what = c("coef", "sd", "var"), ...) {
-  
-  what <- match.arg(what)
-  model <- object$info$model
-  
-  rval <- list(fe = numeric(),
-               vc = replicate(length(object$info$node), matrix(,0,0)),
+
+    ## extract slots for the readability of the code
+    what <- match.arg(what)
+    model <- object$info$model
+    control <- object$info$control
+
+    ## prepare return value
+    rval <- list(fe = numeric(),
+                 vc = replicate(length(object$info$node), matrix(,0,0)),
                re = numeric())
-  names(rval$vc) <-  LETTERS[seq_along(object$info$node)]
-  
-  ## extract coefficients
-  estimates <- switch(what,
-                      coef = coef(model),
-                      sd = diag(vcov(model)),
-                      var = diag(vcov(model)))
-  
-  ids <- lapply(object$info$node, nodeids, terminal = TRUE)
-  
-  formList <- object$info$formula
-  
-  ## the terms for which coefficients exist
-  termsC <- tvcm_get_terms(names(coef(model)), ids, object$info$control$parm)
-  
-  ## the terms for which estimates for 'type' exist
-  termsE <- tvcm_get_terms(names(estimates), ids, object$info$control$parm)
-  
-  ## restricted coefficients
-  if (any(termsE$type == "fe"))
-    rval$fe <- estimates[termsE$type == "fe"]
-  
-  ## random effects
-  if (any(termsE$type == "re"))
-    rval$re <- estimates[termsE$type == "re"]
-  
-  ## varying coefficients
-  if (any(termsE$type == "vc")) {
+    names(rval$vc) <-  LETTERS[seq_along(object$info$node)]
     
-    for (pid in seq_along(object$info$node)) {
-      
-      ## extract the terms corresponding to the partition
-      vcTermsC <- unique(termsC$terms[termsC$partition == LETTERS[pid]])
-      vcTermsE <- unique(termsE$terms[termsE$partition == LETTERS[pid]])
-      
-      ## make a matrix only if specific terms exist for the partition
-      if (length(vcTermsC) > 0L) {
-        
-        nnodes <- length(ids[[pid]]) # number of nodes
-        
-        ## build a matrix to store the coefficients
-        rval$vc[[pid]] <- matrix(, nnodes, length(vcTermsC))
-        rownames(rval$vc[[pid]]) <- ids[[pid]]
-        colnames(rval$vc[[pid]]) <- vcTermsC
-        
-        ## fill the matrix
-        for (i in seq_along(vcTermsC)) {
-          subs <- termsE$terms == vcTermsC[i] & termsE$partition == LETTERS[pid]
-          rval$vc[[pid]][termsE$node[subs], i] <- estimates[subs]
+    ## extract coefficients
+    estimates <- switch(what,
+                        coef = coef(model),
+                        sd = diag(vcov(model)),
+                        var = diag(vcov(model)))
+
+    ## ids of terminal nodes of tree structures
+    ids <- lapply(object$info$node, nodeids, terminal = TRUE)
+
+    
+    ## the 'vc' terms that should exist in theory
+    vcVars <- lapply(object$info$formula$vc, function(x) {
+        rval <- lapply(x$eta, function(x) attr(terms(x), "term.labels"))
+        if (length(rval$ce) > 0 && inherits(model$family, "family.olmm")) {
+            rval$ce <-
+                paste0("Eta", rep(1:model$dims["nEta"], each = length(rval$ce)),
+                       ":", rep(rval$ce, model$dims["nEta"]))
         }
+        return(lapply(rval, function(x) {
+            x <- strsplit(x, ":")
+            return(lapply(x, function(x) {
+                x <- x[-grep("Node[A-Z]", x)]
+              return(paste(x, collapse = ":"))
+            }))
+        }))
+    })
+
+    ## get fixed i.e. main effects
+    feTerms <- lapply(object$info$formula$fe$eta,
+                      function(x) attr(terms(x), "term.labels"))
+    
+    ## the terms for which estimates for 'type' (really) exist
+    termsE <- tvcm_get_terms(names(estimates), ids, control$parm, feTerms)
+    
+    ## restricted coefficients
+    if (any(termsE$type == "fe"))
+        rval$fe <- estimates[termsE$type == "fe"]
+    
+    ## random effects
+    if (any(termsE$type == "re"))
+        rval$re <- estimates[termsE$type == "re"]
+    
+    ## varying coefficients
+    if (any(termsE$type == "vc")) {
         
-        ## add colnames for varying intercepts
-        subs <- which(colnames(rval$vc[[pid]]) %in% "")
-        if (length(subs) > 0L) colnames(rval$vc[[pid]])[subs] <- "(Intercept)"
-        if (ncol(rval$vc[[pid]]) > 0 & inherits(object$info$family, "family.olmm")) {
-          tmp <- strsplit(colnames(rval$vc[[pid]]), ":")
-          subs <- sapply(tmp, length) == 1L &
-            sapply(tmp, function(x) substr(x[1L], 1L, 3L) == "Eta")
-          colnames(rval$vc[[pid]])[subs] <-
-            paste(colnames(rval$vc[[pid]])[subs], "(Intercept)", sep = ":")
+        for (pid in seq_along(object$info$node)) {
+            
+            nnodes <- length(ids[[pid]]) # number of nodes
+            rval$vc[[pid]] <-
+                matrix(, nnodes, length(unlist(vcVars[[pid]])),
+                       dimnames = list(ids[[pid]], unlist(vcVars[[pid]])))
+            
+            ## fill the matrix
+            vcTermsE <- unique(termsE$terms[termsE$partition == LETTERS[pid]])
+            for (i in seq_along(vcTermsE)) {
+                subs <- termsE$terms == vcTermsE[i] & termsE$partition == LETTERS[pid]
+                subsRows <- termsE$node[subs]
+                subsCols <- which(colnames(rval$vc[[pid]]) == vcTermsE[i])
+                rval$vc[[pid]][subsRows, subsCols] <- estimates[subs]
+            }
+            
+            ## add column names for varying intercepts
+            subs <- which(colnames(rval$vc[[pid]]) %in% "")
+            if (length(subs) > 0L) colnames(rval$vc[[pid]])[subs] <- "(Intercept)"
+            if (ncol(rval$vc[[pid]]) > 0 &
+                inherits(object$info$family, "family.olmm")) {
+                tmp <- strsplit(colnames(rval$vc[[pid]]), ":")
+                subs <- sapply(tmp, length) == 1L &
+                    sapply(tmp, function(x) substr(x[1L], 1L, 3L) == "Eta")
+                colnames(rval$vc[[pid]])[subs] <-
+                    paste(colnames(rval$vc[[pid]])[subs], "(Intercept)", sep = ":")
+            }
+            
+            ## fill the last row if necessary
+            if (nrow(rval$vc[[pid]]) > 1L) {
+                subs <- is.na(rval$vc[[pid]][nnodes, ])
+                if (any(subs)) {
+                
+                    ## compute the coefficients of the omitted node
+                    con <- model$contrasts[[paste0("Node", LETTERS[pid])]][nnodes, ]
+                    for (i in which(subs)) {
+                        rval$vc[[pid]][nnodes, i] <-
+                            switch(what,
+                                   coef = sum(con * rval$vc[[pid]][-nnodes, i],
+                                       na.rm = TRUE),
+                                   sd = sum(con^2 * rval$vc[[pid]][-nnodes, i],
+                                       na.rm = TRUE),
+                                   var = sum(con^2 * rval$vc[[pid]][-nnodes, i],
+                                       na.rm = TRUE))
+                    }
+                }
+            }
         }
-        
-        ## fill the last row if necessary
-        subs <- is.na(rval$vc[[pid]][nnodes, ])
-        if (any(subs)) {
-          
-          ## compute the coefficients of the omitted node
-          con <- model$contrasts[[paste("Node", LETTERS[pid],
-                                        sep = "")]][nnodes, ]
-          for (i in which(subs)) {
-            rval$vc[[pid]][nnodes, i] <-
-              switch(what,
-                     coef = sum(con * rval$vc[[pid]][-nnodes, i], na.rm = TRUE),
-                     sd = sum(con^2 * rval$vc[[pid]][-nnodes, i], na.rm = TRUE),
-                     var = sum(con^2 * rval$vc[[pid]][-nnodes, i], na.rm = TRUE))
-          }
-        }
-      }
     }
     
     if (what == "sd") {
-      getSqrt <- function(x) {
-        if (is.list(x)) {
-          return(lapply(x, getSqrt))
-        } else if (length(x) > 0) {
-          return(sqrt(x))
-        } else {
-          return(x)
+        getSqrt <- function(x) {
+            if (is.list(x)) {
+                return(lapply(x, getSqrt))
+            } else if (length(x) > 0) {
+                return(sqrt(x))
+            } else {
+                return(x)
+            }
         }
-      }
-      rval <- lapply(rval, getSqrt)           
+        rval <- lapply(rval, getSqrt)
     }
-  }
-  return(rval)
+    return(rval)
 }
 
 
@@ -2274,14 +2392,15 @@ tvcm_get_estimates <- function(object, what = c("coef", "sd", "var"), ...) {
 ##' Create short labes for 'vc' terms
 ##'
 ##' @param object a \code{\link{tvcm}} object
-##' 
+##' @param intercept logical scalar. Whether '(Intercept)'
+##'    should be added to the label.
 ##' @return A character vector with a label for each 'vc'
 ##'    term.
 ##'
 ##' @details Used in 'tvcm_print' and 'plot.tvcm'.
 ##'-------------------------------------------------------- #
 
-tvcm_print_vclabs <- function(formList) {
+tvcm_print_vclabs <- function(formList, intercept = FALSE) {
   
   if (length(formList$vc) == 0) return(NULL)
   
@@ -2303,16 +2422,21 @@ tvcm_print_vclabs <- function(formList) {
     if (rval == "NULL") return("") else return(rval)
   }
   by <- sapply(vcLabs, function(x) eval(parse(text = x)))
-
+  if (intercept) {
+      hasInt <- sapply(formList$vc, function(x) x$intercept) != "none"
+      for (i in which(hasInt)) 
+          by[i] <- paste0("(Intercept)", ifelse(by[i] ==  "", "", " + "), by[i])
+  }
+  
   ## collapse the short labels
   rval <- rep.int("vc(", length(formList$vc))
   for (pid in seq_along(rval)) {
     if (length(cond) > 0L) 
-      rval[pid] <- paste(rval[pid], paste(cond[[pid]], collapse = ", "), sep = "")
+      rval[pid] <- paste0(rval[pid], paste(cond[[pid]], collapse = ", "))
     if (by[pid] != "")
-      rval[pid] <- paste(rval[pid], ", by = ", by[pid], sep = "")
+      rval[pid] <- paste0(rval[pid], ", by = ", by[pid])
   }
-  rval <- paste(rval, ")", sep = "")
+  rval <- paste0(rval, ")")
   return(rval)
 }
 
@@ -2502,7 +2626,7 @@ tvcm_grow_splitpath <- function(splitpath, varid, nodes, partData, control) {
       for (pid in seq_along(nodes))
         if (!is.null(splitpath[[step]]$sctest[[pid]]))
           rownames(splitpath[[step]]$sctest[[pid]]) <-
-            paste("Node", LETTERS[pid], kidids[[pid]], sep = "")
+            paste0("Node", LETTERS[pid], kidids[[pid]])
       
     }
 
@@ -2512,7 +2636,7 @@ tvcm_grow_splitpath <- function(splitpath, varid, nodes, partData, control) {
       names(splitpath[[step]]$grid) <- LETTERS[seq_along(nodes)]
       for (pid in seq_along(splitpath[[step]]$grid)) {
         names(splitpath[[step]]$grid[[pid]]) <-
-          paste("Node", kidids[[pid]], sep = "")
+          paste0("Node", kidids[[pid]])
         for (nid in seq_along(splitpath[[step]]$grid[[pid]])) { 
           names(splitpath[[step]]$grid[[pid]][[nid]]) <-
             colnames(partData)[varid[[pid]]]

@@ -1,6 +1,7 @@
 ##' -------------------------------------------------------- #
-##' Author:       Reto Buergin, rbuergin@gmx.ch
-##' Date:         2014-09-25
+##' Author:       Reto Buergin
+##' E-Mail:       rbuergin@gmx.ch
+##' Date:         2015-10-30
 ##'
 ##' References:
 ##' ordinal:     http://cran.r-project.org/web/packages/ordinal/index.html
@@ -13,7 +14,9 @@
 ##'
 ##'
 ##' Modifications:
-##' 2015-01-15: - improved predict.olmm
+##' 2015-10-30: set default 'na.action = na.omit' on 'olmm'
+##' 2015-09-02: started with integration auf gaussian mixed model
+##' 2015-01-15: improved predict.olmm
 ##' 2014-09-25: - removed bug for numeric estimation of covariance of
 ##'               'olmm' objects
 ##'             - define 'score_sbj' and 'score_obs' slot even if
@@ -137,7 +140,7 @@ olmm_control <- function(fit = c("nlminb", "ucminf", "optim"), doFit = TRUE,
 }
 
 olmm <- function(formula, data, family = cumulative(),
-                 weights, subset, na.action,
+                 weights, subset, na.action = na.omit,
                  offset, contrasts, control = olmm_control(), ...) {
 
   ## check arguments
@@ -160,12 +163,24 @@ olmm <- function(formula, data, family = cumulative(),
   } else if (is.function(family)) {
     family <- family()
   }
-  if (!inherits(family, "family.olmm")) {
+  if (!inherits(family, c("family", "family.olmm"))) {
     print(family)
     stop("'family' not recognized")
-  }  
-  linkNum <- switch(family$link, logit = 1L, probit = 2L, cauchy = 3L)
-  famNum <- switch(family$family, cumulative = 1L, baseline = 2L, adjacent = 3L)
+  }
+  if (inherits(family, "family")) {
+      stop("'family' not recognized")
+      ## 2015-10-05: work on gaussian model stopped for a moment
+      ## if (family$family %in% "gaussian") {
+      ##     class(family) <- c("family.olmm", "olmm")
+      ## } else {
+      ##     stop("'family' not recognized")
+      ## }
+      ## if (!family$link %in% "identity") stop("'link' not recognized")
+  }
+  linkNum <- switch(family$link,
+                    logit = 1L, probit = 2L, cauchy = 3L, identity = 11L)
+  famNum <- switch(family$family,
+                   cumulative = 1L, baseline = 2L, adjacent = 3L, gaussian = 11L)
 
   ## evaluate contrasts
   con <- lapply(1:ncol(data), function(i) attr(data[, i], "contrasts"))
@@ -205,9 +220,11 @@ olmm <- function(formula, data, family = cumulative(),
 
   ## extract responses
   y <- model.response(fullmf)
-  if (!is.factor(y)) stop("response must be a 'factor'")
-  if (nlevels(y) < 2L)
-    stop("response variable has less than 2 categories")
+  if (famNum < 10) {
+      if (!is.factor(y)) stop("response must be a 'factor'")
+      if (nlevels(y) < 2L)
+          stop("response variable has less than 2 categories")
+  }
   
   ## extract fixed effect model matrix
   fixefmf$formula <- terms(formList$fe$eta$ce, keep.order = TRUE)
@@ -235,7 +252,7 @@ olmm <- function(formula, data, family = cumulative(),
     }
   }
   
-  ## extract random effect grouping factor subject
+  ## extract random effect grouping factor 'subject'
   hasRanef <- TRUE
   subjectName <- all.vars(formList$re$cond)
   if (length(subjectName) == 0L) { # hack to permit models without random effects
@@ -272,7 +289,8 @@ olmm <- function(formula, data, family = cumulative(),
   if (is.null(cons)) storage.mode(cons) <- "list"
   
   ## vector for dimensions etc.
-  dims <- as.integer(c(n = nrow(X), N = nlevels(subject), p = (nlevels(y) - 1L) * sum(attr(X, "merge") == 1L) + sum(attr(X, "merge") == 2L), pEta = ncol(X), pInt = length(intTerms), pCe = sum(attr(X, "merge") == 1L), pGe = sum(attr(X, "merge") == 2L), q = (nlevels(y) - 1L) * sum(attr(W, "merge") == 1L) + sum(attr(W, "merge") == 2L), qEta = ncol(W), qCe = sum(attr(W, "merge") == 1L), qGe = sum(attr(W, "merge") == 2L), J = nlevels(y), nEta = nlevels(y) - 1L, nPar = (nlevels(y) - 1L) * sum(attr(X, "merge") == 1L) + sum(attr(X, "merge") == 2L) + ((nlevels(y) - 1L) * sum(attr(W, "merge") == 1L) + sum(attr(W, "merge") == 2L)) * (1L + (nlevels(y) - 1L) * sum(attr(W, "merge") == 1L) + sum(attr(W, "merge") == 2L)) / 2L, nGHQ = control$nGHQ, nQP = control$nGHQ^((nlevels(y) - 1L) * sum(attr(W, "merge") == 1L) + sum(attr(W, "merge") == 2L)), family = famNum, link = linkNum, verb = control$verbose, numGrad = control$numGrad, numHess = control$numHess, doFit = control$doFit, hasRanef = hasRanef))
+  nEta <- if (is.factor(y)) nlevels(y) - 1 else 1 
+  dims <- as.integer(c(n = nrow(X), N = nlevels(subject), p = nEta * sum(attr(X, "merge") == 1L) + sum(attr(X, "merge") == 2L), pEta = ncol(X), pInt = length(intTerms), pCe = sum(attr(X, "merge") == 1L), pGe = sum(attr(X, "merge") == 2L), q = nEta * sum(attr(W, "merge") == 1L) + sum(attr(W, "merge") == 2L), qEta = ncol(W), qCe = sum(attr(W, "merge") == 1L), qGe = sum(attr(W, "merge") == 2L), J = nEta + 1, nEta = nEta, nPar = nEta * sum(attr(X, "merge") == 1L) + sum(attr(X, "merge") == 2L) + (nEta * sum(attr(W, "merge") == 1L) + sum(attr(W, "merge") == 2L)) * (1L + nEta * sum(attr(W, "merge") == 1L) + sum(attr(W, "merge") == 2L)) / 2L, nGHQ = control$nGHQ, nQP = control$nGHQ^(nEta * sum(attr(W, "merge") == 1L) + sum(attr(W, "merge") == 2L)), family = famNum, link = linkNum, verb = control$verbose, numGrad = control$numGrad, numHess = control$numHess, doFit = control$doFit, hasRanef = hasRanef))
   names(dims) <- c("n", "N", "p", "pEta", "pInt", "pCe", "pGe", "q", "qEta", "qCe", "qGe", "J", "nEta", "nPar", "nGHQ", "nQP", "family", "link", "verb", "numGrad", "numHess", "doFit", "hasRanef")
 
   ## parameter names
@@ -384,7 +402,7 @@ olmm <- function(formula, data, family = cumulative(),
 
   ## set the transformed random effect matrix
   u <- matrix(0, dims["N"], dims["q"],
-              dimnames = list(levels(subject), rownames(start$ranefCholFac)))                 
+              dimnames = list(levels(subject), rownames(start$ranefCholFac)))     
   
   ## get terms and delete environments
   formList <- vcrpart_formula_delEnv(formList)
