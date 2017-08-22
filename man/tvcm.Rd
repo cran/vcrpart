@@ -14,7 +14,7 @@
 \usage{
 tvcm(formula, data, fit, family,
      weights, subset, offset, na.action = na.omit,
-     control = tvcm_control(), ...)
+     control = tvcm_control(), fitargs, ...)
 }
 
 \arguments{
@@ -41,8 +41,11 @@ tvcm(formula, data, fit, family,
     are dropped. See \command{\link{na.action}}.} 
   \item{control}{a list with control parameters as returned by
     \command{\link{tvcm_control}}.}
+  \item{fitargs}{additional arguments passed to the fitting function
+    \code{fit}.} 
   \item{\ldots}{additional arguments passed to the fitting function
-    \code{fit}.}  
+    \code{fit}. Note that using the \code{fitargs} argument is the
+    preferred way to for this.}  
 }
 
 \details{ 
@@ -71,15 +74,18 @@ tvcm(formula, data, fit, family,
 \value{An object of class \command{\link{tvcm}}. The
     \command{\link{tvcm}} class itself is based on the
     \command{\link{party}} class of the \pkg{partykit} package. The most
-    important slots are: \item{node}{an object of class
-    \command{\link{partynode}}.} \item{data}{a (potentially empty)
-    \command{\link{data.frame}}.} \item{fitted}{an optional
-    \command{\link{data.frame}} with \code{nrow(data)} rows and
-    containing at least the fitted terminal node identifiers as element
-    \code{(fitted)}. In addition, weights may be contained as element
-    \code{(weights)} and responses as \code{(response)}.}
-    \item{info}{additional information including\code{control} and
-    \code{model}.} 
+    important slots are:
+
+    \item{node}{an object of class \command{\link{partynode}}.}
+    \item{data}{a \command{\link{data.frame}}. The model frame with all
+      variables for partitioning.}
+    \item{fitted}{an optional \command{\link{data.frame}} containing at
+      least the fitted terminal node identifiers as element
+      \code{(fitted)}. In addition, weights may be contained as element
+      \code{(weights)} and responses as \code{(response)}.} 
+    \item{info}{additional information including \code{control},
+      \code{model} and \code{data} (all untransformed data, without
+      missings).} 
 }
 
 \references{
@@ -95,13 +101,18 @@ tvcm(formula, data, fit, family,
   for Recursive Partytioning in R. In \emph{Working Papers in Economics
   and Statistics, Research Platform Empirical and Experimental
   Economics}, Number 2014-10. Universitaet Innsbruck.
-  
-  Buergin R. and G. Ritschard (2015a), Tree-Based Varying Coefficient
+
+  Buergin R. and Ritschard G. (2015), Tree-Based Varying Coefficient 
   Regression for Longitudinal Ordinal Responses. \emph{Computational
-  Statistics & Data Analysis}. Forthcoming. 
+    Statistics & Data Analysis}, \bold{86}, 65--80.
+
+  Buergin, R. A. (2015b). Tree-based methods for moderated regression
+  with application to longitudinal data. PhD thesis. University of
+  Geneva. 
   
-  Buergin R. and G. Ritschard (2015b), Coefficient-Wise Tree-Based
-  Varying Coefficient Regression with vcrpart. Article in progress.
+  Buergin, R. and G. Ritschard (2017), Coefficient-Wise Tree-Based
+  Varying Coefficient Regression with vcrpart. \emph{Journal of
+  Statistical Software}, \bold{80}(6), 1--33.
 }
 
 \seealso{\command{\link{tvcolmm}}, \command{\link{tvcglm}},
@@ -123,7 +134,7 @@ poverty$EduHigh <- 1 * (poverty$Edu == "high")
 model.Pov <-
   tvcm(Poor ~ -1 +  vc(CivStat) + vc(CivStat, by = EduHigh) + NChild, 
          family = binomial(), data = poverty, subset = 1:200,
-         control = tvcm_control(verbose = TRUE, 
+         control = tvcm_control(verbose = TRUE, papply = "lapply",
            folds = folds_control(K = 1, type = "subsampling", seed = 7)))
 
 ## diagnosis

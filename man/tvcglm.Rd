@@ -8,7 +8,7 @@
 
 \description{The \command{\link{tvcglm}} function implements the
   tree-based varying coefficient regression algorithm for generalized
-  linear models introduced by Buergin and Ritschard (2015b). The
+  linear models introduced by Buergin and Ritschard (2017). The
   algorithm approximates varying coefficients by piecewise constant
   functions using recursive partitioning, i.e., it estimates the
   selected coefficients individually by strata of the value space of
@@ -26,7 +26,8 @@ tvcglm(formula, data, family,
 tvcglm_control(minsize = 30, mindev = 2.0,
                maxnomsplit = 5, maxordsplit = 9, maxnumsplit = 9,
                cv = TRUE, folds = folds_control("kfold", 5),
-               prune = cv, fast = TRUE, center = fast, ...)
+               prune = cv, fast = TRUE, center = fast,
+	       maxstep = 1e3, verbose = FALSE, ...)
 }
 
 \arguments{
@@ -59,7 +60,8 @@ tvcglm_control(minsize = 30, mindev = 2.0,
     listwise deletion, i.e., observations with missings on any variable
     are dropped. See \command{\link{na.action}}.}
   \item{control}{a list with control parameters as returned by
-    \command{\link{tvcglm_control}}.}
+    \command{\link{tvcglm_control}}, or by \command{\link{tvcm_control}}
+    for advanced users.}
   \item{minsize}{numeric (vector). The minimum sum of weights in
     terminal nodes.}
   \item{mindev}{numeric scalar. The minimum permitted training error 
@@ -85,7 +87,11 @@ tvcglm_control(minsize = 30, mindev = 2.0,
     \code{FALSE}, the accurate search model is used.}
   \item{center}{logical integer. Whether the predictor variables of
     update models during the grid search should be centered. Note that
-    \code{TRUE} will not modify the predictors of the fitted model.} 
+    \code{TRUE} will not modify the predictors of the fitted model.}
+  \item{maxstep}{integer. The maximum number of iterations i.e. number
+    of splits to be processed.}  
+  \item{verbose}{logical. Should information about the fitting process
+    be printed to the screen?}
   \item{\ldots}{additional arguments passed to the fitting function
     \code{fit} or to \command{\link{tvcm_control}}.}  
 }
@@ -144,9 +150,10 @@ tvcglm_control(minsize = 30, mindev = 2.0,
   Wang, J. C., Hastie, T. (2014), Boosted Varying-Coefficient
   Regression Models for Product Demand Prediction, \emph{Journal of
     Computational and Graphical Statistics}, \bold{23}(2), 361-382. 
-  
-  Buergin R. and G. Ritschard (2015b). Coefficient-Wise Tree-Based
-  Varying Coefficient Regression with vcrpart. Article in progress.
+
+  Buergin, R. and G. Ritschard (2017), Coefficient-Wise Tree-Based
+  Varying Coefficient Regression with vcrpart. \emph{Journal of
+    Statistical Software}, \bold{80}(6), 1--33.
 }
 
 \seealso{\command{\link{tvcm_control}}, \command{\link{tvcm-methods}},
@@ -165,7 +172,7 @@ tvcglm_control(minsize = 30, mindev = 2.0,
 ## effect of 'CivStat' and a second that accounts for the moderation of
 ## 'CivStat' on the relation between 'EduHigh' and 'Poor'. We use here
 ## the 2-stage procedure with a partitioning- and a pruning stage as
-## described in Buergin and Ritschard (2014b). 
+## described in Buergin and Ritschard (2017). 
 ## ------------------------------------------------------------------- #
 
 data(poverty)

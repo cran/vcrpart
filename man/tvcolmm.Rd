@@ -8,7 +8,7 @@
 
 \description{The \command{\link{tvcolmm}} function implements the
   tree-based longitudinal varying coefficient regression algorithm
-  proposed in Buergin and Ritschard (2015a). The algorithm approximates
+  proposed in Buergin and Ritschard (2015). The algorithm approximates
   varying fixed coefficients in the cumulative logit mixed model by a
   (multivariate) piecewise constant function using recursive
   partitioning, i.e., it estimates the fixed effect component of the
@@ -21,11 +21,11 @@ tvcolmm(formula, data, family = cumulative(),
         weights, subset, offset, na.action = na.omit, 
         control = tvcolmm_control(), ...)
 
-tvcolmm_control(alpha = 0.05, bonferroni = TRUE, minsize = 50,
-                maxnomsplit = 5, maxordsplit = 9,
+tvcolmm_control(sctest = TRUE, alpha = 0.05, bonferroni = TRUE,
+                minsize = 50, maxnomsplit = 5, maxordsplit = 9,
                 maxnumsplit = 9, fast = TRUE,
                 trim = 0.1, estfun.args = list(), nimpute = 5,
-                seed = NULL, ...)
+                seed = NULL, maxstep = 1e3, verbose = FALSE, ...)
 }
 
 \arguments{
@@ -57,7 +57,11 @@ tvcolmm_control(alpha = 0.05, bonferroni = TRUE, minsize = 50,
     listwise deletion, i.e., observations with missings on any variable
     are dropped. See \command{\link{na.action}}.}
   \item{control}{a list with control parameters as returned by
-    \command{\link{tvcolmm_control}}.}
+    \command{\link{tvcolmm_control}}, or by \command{\link{tvcm_control}}
+    for advanced users.}
+  \item{sctest}{logical scalar. Defines whether coefficient constancy
+    tests should be used for the variable and node selection in each
+    iteration.}
   \item{alpha}{numeric significance threshold between 0 and 1. A node is
     splitted when the smallest (possibly Bonferroni-corrected) \eqn{p}
     value for any coefficient constancy test in the current step falls
@@ -83,6 +87,10 @@ tvcolmm_control(alpha = 0.05, bonferroni = TRUE, minsize = 50,
     iteration. See details.}
   \item{seed}{an integer specifying which seed should be set at the
     beginning.}
+  \item{maxstep}{integer. The maximum number of iterations i.e. number
+    of splits to be processed.}  
+  \item{verbose}{logical. Should information about the fitting process
+    be printed to the screen?}
   \item{\ldots}{additional arguments passed to the fitting function
     \code{fit} or to \command{\link{tvcm_control}}.}  
 }
@@ -136,7 +144,7 @@ tvcolmm_control(alpha = 0.05, bonferroni = TRUE, minsize = 50,
   the arguments \code{maxnomsplit}, \code{maxordsplit} and
   \code{maxnumsplit}. By default, the algorithm also uses the
   approximative search model approach proposed in Buergin and Ritschard
-  (2014c). To disable this option to use the original algorithm, set
+  (2017). To disable this option to use the original algorithm, set
   \code{fast = FALSE} in \command{\link{tvcolmm_control}}.
 
   Special attention is given to varying intercepts, i.e. the terms that
@@ -162,10 +170,14 @@ tvcolmm_control(alpha = 0.05, bonferroni = TRUE, minsize = 50,
   Parameter Instability, \emph{Statistica Neerlandica}, \bold{61}(4),
   488--508.
   
-  Buergin R. and Ritschard G. (2015a), Tree-Based Varying Coefficient 
+  Buergin R. and Ritschard G. (2015), Tree-Based Varying Coefficient 
   Regression for Longitudinal Ordinal Responses. \emph{Computational
-  Statistics & Data Analysis}. Forthcoming. 
-      
+    Statistics & Data Analysis}, \bold{86}, 65--80.
+
+  Buergin, R. and G. Ritschard (2017), Coefficient-Wise Tree-Based
+  Varying Coefficient Regression with vcrpart. \emph{Journal of
+  Statistical Software}, \bold{80}(6), 1--33.
+
   Sela R. and J. S. Simonoff (2012). RE-EM trees: A Data Mining
   Approach for Longitudinal and Clustered data, \emph{Machine Learning}
   \bold{86}(2), 169--207. 
@@ -188,7 +200,7 @@ tvcolmm_control(alpha = 0.05, bonferroni = TRUE, minsize = 50,
 ## the effect of unemployment 'UNEMP' on happiness 'GHQL' is moderated 
 ## by 'AGE', 'FISIT', 'GENDER' and 'UEREGION'. 'FISIT' is the only true  
 ## moderator. For the the partitioning we coefficient constancy tests,
-## as described in Buergin and Ritschard (2014a)
+## as described in Buergin and Ritschard (2015)
 ## ------------------------------------------------------------------- #
 
 data(unemp)
