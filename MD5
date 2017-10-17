@@ -1,6 +1,6 @@
-6f97001bc9307a6c61fc6c2dec447ede *DESCRIPTION
+00fa11f453239d83c49a391f1d7dd2b2 *DESCRIPTION
 88f2a7e8732471db378d8c7ad4d414b7 *NAMESPACE
-db2354e4a737b45a2d4e1f9416f8752a *NEWS
+ef76328b52cdee76b9eb87f36c8d18c4 *NEWS
 8b40e51cf24df0eb99503a7070b84a93 *R/AAA.R
 160b81f4ae1117bfe2f84236b2d2af0f *R/AllGeneric.R
 594f5359a79fc4cd908512f91da3f439 *R/fvcm.R
@@ -12,7 +12,7 @@ db2354e4a737b45a2d4e1f9416f8752a *NEWS
 0d61b66e97dd63d12acc811055982b13 *R/tvcm-cv.R
 a56eb3ce150852b6e0f89bae76045145 *R/tvcm-methods.R
 773603a317d64e5674e7257c9a857409 *R/tvcm-plot.R
-9da6909d2a597d6d4d64de42c05b593b *R/tvcm-utils.R
+6b7a6de9c4bf75d4c88e81c11df5124b *R/tvcm-utils.R
 86cd70f18d32eb1b9a58ff4e7d0b4338 *R/tvcm.R
 9d40db38c5fd987f14b5716ed08da2b1 *R/utils.R
 60387778eacc623d54ae76f33d4de60c *ToDo
@@ -26,8 +26,8 @@ ea62be4e5d10df5bc683725a7f7935f6 *data/schizo.RData
 cb803decf95c39567f648e1e5e0ddb45 *data/vcrpart_2.RData
 3ddf5ac69dc37253946b83c5bfd5fca7 *data/vcrpart_3.RData
 073dbc46eee3af9fc409b395fef38eaa *inst/CITATION
-596630a3792956eede699a719233bae1 *inst/doc/vcrpart.Rnw
-3a6075206932b1be8110c82c31679adb *inst/doc/vcrpart.pdf
+2cc6e45ac533eb0551eab45747d2b613 *inst/doc/vcrpart.Rnw
+6ad00ccbe8d06fe5532c01aa1632c940 *inst/doc/vcrpart.pdf
 38f1299f8a057cb18bbe99fb630249f3 *man/PL.Rd
 ef7899f341e4dd14895e0f20af9ff4bf *man/contr-wsum.Rd
 d019d09b94cae8c5342c3b4bb42838da *man/fvcm-methods.Rd
@@ -53,7 +53,7 @@ c77bcd03b4cb28c5a91036575b93d716 *man/tvcolmm.Rd
 873a11355678ee053f51b38089f893f4 *man/vcrpart-formula.Rd
 2a6f9e9e044a78154d3cfda5936d6f48 *src/Makevars
 bdcec3746d75f6748e912f41ccab8baa *src/init.c
-35966357c5a95456455ed60954652fb3 *src/olmm.c
+405cbdb2b8f51375ddec28bfdff553a0 *src/olmm.c
 79ee30a544c9bd2e26891000e3bb2a59 *src/olmm.h
 0af72621bd0a3d74afc3a3a0220f92c4 *src/tvcm.c
 e8b96835ed09462a3fef4b1f581279cd *src/tvcm.h
@@ -70,4 +70,4 @@ dca495b2e307300047257c547e9795ed *vignettes/Figures/jss2564-school-fig-tree.pdf
 31aee9b5f0da739c73a2117f48a42c67 *vignettes/Figures/jss2564-ucba-fig-cv.pdf
 287d69566937f6e73e6f421d1a9b4bb9 *vignettes/Figures/jss2564-ucba-fig-vcm.pdf
 fd41663f2eacaabf3a9ebf47b94eac4d *vignettes/Figures/jss2564-ucba-fig-vcmL.pdf
-596630a3792956eede699a719233bae1 *vignettes/vcrpart.Rnw
+2cc6e45ac533eb0551eab45747d2b613 *vignettes/vcrpart.Rnw

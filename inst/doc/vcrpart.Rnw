@@ -53,7 +53,8 @@ empirical applications.
   E-mail: \email{Gilbert.Ritschard@unige.ch}
 }
 
-\usepackage[utf8x]{inputenc}
+\usepackage[utf8]{inputenc} % 2017-08-23
+%\usepackage[utf8x]{inputenc}
 %\usepackage{Sweave.sty}
 % \usepackage{Sweave}
 % \SweaveOpts{eps=TRUE}
