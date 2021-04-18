@@ -2,8 +2,8 @@ Package: vcrpart
 Type: Package
 Title: Tree-Based Varying Coefficient Regression for Generalized Linear
         and Ordinal Mixed Models
-Version: 1.0-3
-Date: 2020-02-04
+Version: 1.0-4
+Date: 2021-04-15
 Authors@R: c(
   person("Reto", "Buergin", role = c("aut", "cre", "cph"), email = "rbuergin@gmx.ch"),
   person("Gilbert", "Ritschard", role = c("ctb", "ths"),
@@ -16,8 +16,8 @@ Imports: stats, grid, graphics, methods, nlme (>= 3.1-123), rpart,
         formula.tools, numDeriv, ucminf, zoo, sandwich, strucchange
 LazyLoad: yes
 NeedsCompilation: yes
-Packaged: 2020-02-06 18:44:02 UTC; reto
+Packaged: 2021-04-16 10:21:27 UTC; reto
 Author: Reto Buergin [aut, cre, cph],
   Gilbert Ritschard [ctb, ths]
 Repository: CRAN
-Date/Publication: 2020-02-26 23:50:02 UTC
+Date/Publication: 2021-04-18 21:40:02 UTC
