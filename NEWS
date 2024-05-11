@@ -1,15 +1,31 @@
-Changes in Version 1.0-4 [2021-04-15]
+Changes in Version 1.0-5 [2024-05-06]
+
+    o   Newest grid.rect() version seems seems to use white as default
+        background (and not transparent as previously). Was a problem in 
+        panel_coef().
+
+    o   Solve new issue with character arguments at Fortran calls.
+
+    o   estfun() and gefp() are not anymore exported as methods for olmm(). estfun.olmm() and estfun.gefp() were renamed to olmm_estfun() and olmm_gefp().
+
+    o   Removed vignette because of warning messages on the size of the pdf.
+
+    o   Documentation of output values of various methods for 'fvcm', 'olmm' and 'tvcm'.
+
+Changes in Version 1.0-4 [2021-04-17]
 
     o   In R 4.1, length(fix) > 1 in 'olmm_control' caused an 
-        error. Fixed by Gilbert Ritschard. 
+        error. Fixed by Gilbert Ritschard.
+        
+    o   Vignette as Rnw file. 
 
 Changes in Version 1.0-3
 
-    o   Fixed bug for option 'numHess = TRUE' of 'olmm_control'
+    o   Fixed bug for option 'numHess = TRUE' of 'olmm_control'.
     
-    o   Fixed issues with change of class of matrices from R 4.0.0
+    o   Fixed issues with change of class of matrices from R 4.0.0.
 
-    o   Re-added vignette
+    o   Re-added vignette.
 
 Changes in Version 1.0-2
 
@@ -28,7 +44,7 @@ Changes in Version 1.0-1
         were used for small objects.
 
     o   Improve R-Code for 'alloca' calls (adding 'R_CheckStack()'
-        after calls)
+        after calls).
 
 Changes in Version 1.0-0
 

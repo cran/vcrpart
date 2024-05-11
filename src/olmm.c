@@ -1,9 +1,15 @@
+#ifndef  USE_FC_LEN_T
+# define USE_FC_LEN_T
+#endif
 #include "olmm.h"
 #include "utils.h"
 #include <Rmath.h>
 #include <R_ext/Utils.h>
 #include <R_ext/Lapack.h>
 #include <R_ext/BLAS.h>
+#ifndef FCONE
+# define FCONE
+#endif
 
 /* set array values to zero */
 #define AllocVal(x, n, v) {int _I_, _SZ_ = (n); for(_I_ = 0; _I_ < _SZ_; _I_++) (x)[_I_] = (v);}
@@ -163,11 +169,21 @@ SEXP olmm_setPar(SEXP x, SEXP par) {
   for (int i = 0; i < lenVRanefCholFac; i++)
     vRanefCholFac[i] = newPar[p + i];
   
-  F77_CALL(dgemv)("T", /* multiply with l. t. elimination matrix */ 
-		  &lenVRanefCholFac, &lenVecRanefCholFac,
-  		  &one, ranefElMat, 
-		  &lenVRanefCholFac, vRanefCholFac, &i1, 
-		  &zero, vecRanefCholFac, &i1);
+  /* e.g. https://netlib.org/lapack/explore-html/d7/dda/group__gemv_ga4ac1b675072d18f902db8a310784d802.html */
+  /* multiply with l. t. elimination matrix */ 
+  /* TRANS: "T" > (alpha*A'*x + beta*y) */
+  /* M: number of rows of A */
+  /* N: number of columns of A */
+  /* ALPHA: double precision  */
+  /* A */
+  /* LDA */
+  /* X */
+  /* INC */
+  /* BETA */
+  /* Y */
+  /* INCY */
+  F77_CALL(dgemv)("T", &lenVRanefCholFac, &lenVecRanefCholFac, &one, ranefElMat,
+                  &lenVRanefCholFac, vRanefCholFac, &i1, &zero, vecRanefCholFac, &i1 FCONE);
 
   /* write updated coefficients into a list */
   SET_VECTOR_ELT(rvalR, 0, fixefR);
@@ -294,7 +310,7 @@ SEXP olmm_update_marg(SEXP x, SEXP par) {
   /* update eta = offset + Xb */
   if (pEta > 0L)
     F77_CALL(dgemm)("N", "N", &n, &nEta, &pEta, &one, X, &n, fixef, 
-		    &pEta, &one, eta, &n);
+		    &pEta, &one, eta, &n FCONE FCONE);
   
   switch (family) {
   case 1: 
@@ -347,7 +363,7 @@ SEXP olmm_update_marg(SEXP x, SEXP par) {
 
     /* multiply ranefCholFac with actual nodes */
     F77_CALL(dgemv)("N", &q, &q, &one, ranefCholFac, &q, 
-		    gq_nodes, &i1, &zero, ranefVec, &i1);
+		    gq_nodes, &i1, &zero, ranefVec, &i1 FCONE);
 
     /* ranefVec (vector) to ranef (matrix) */
     for (int i = 0; i < nEta; i++) {
@@ -370,7 +386,7 @@ SEXP olmm_update_marg(SEXP x, SEXP par) {
 
     /* compute contribution of random effects to linear predictor */
     F77_CALL(dgemm)("N", "N", &n, &nEta, &qEta, &one, W, &n, 
-		    ranef, &qEta, &zero, etaRanef, &n);    
+		    ranef, &qEta, &zero, etaRanef, &n FCONE FCONE);    
 
     /* use etaRanefCLM to accelerate computations */
     if (family == 1) {
@@ -420,7 +436,7 @@ SEXP olmm_update_marg(SEXP x, SEXP par) {
 
 	/* hack to avoid numeric problems with DBL_MIN, DBL_MAX */
 	logLikCond_modified = 
-	  (fabs(exp(logLikCond_obs[i])) < 1E-6) & (gq_weight < 1E-6) ?
+	  ((fabs(exp(logLikCond_obs[i])) < 1E-6) & (gq_weight < 1E-6)) ?
 	  DBL_MAX : logLikCond_obs[i];
 	
 	/* calculate the Kronecker product of u_i and w_it */
@@ -441,7 +457,7 @@ SEXP olmm_update_marg(SEXP x, SEXP par) {
 	F77_CALL(dgemv)("N", &lenVRanefCholFac, &lenVecRanefCholFac, 
 			&one, ranefElMat, 
 			&lenVRanefCholFac, vecRanefTerm, &i1, 
-			&zero, vRanefTerm, &i1);
+			&zero, vRanefTerm, &i1 FCONE);
 	
 	/* fixed effect scores ........................ */
 	
@@ -620,7 +636,7 @@ SEXP olmm_update_marg(SEXP x, SEXP par) {
       hInv2 = - weights_sbj[i] / (logLik_sbj[i] * logLik_sbj[i]);
       for (int j = 0; j < nPar; j++) hDerVec[j] = score_sbj[i + N * j];
       F77_CALL(dgemm)("N", "T", &nPar, &nPar, &i1, &hInv2, hDerVec,
-		      &nPar, hDerVec, &nPar, &one, info, &nPar);
+		      &nPar, hDerVec, &nPar, &one, info, &nPar FCONE FCONE);
     }
   }
 
@@ -781,7 +797,7 @@ SEXP olmm_update_u(SEXP x) {
     
     /* multiply ranefCholFac with actual nodes */
     F77_CALL(dgemv)("N", &q, &q, &one, ranefCholFac, &q, 
-		    gq_nodes, &i1, &zero, ranefVec, &i1);
+		    gq_nodes, &i1, &zero, ranefVec, &i1 FCONE);
     
     /* ranefVec (vector) to ranef (matrix) */
     for (int i = 0; i < nEta; i++) {
@@ -810,7 +826,7 @@ SEXP olmm_update_u(SEXP x) {
 
     /* compute contribution of random effects to linear predictor */
     F77_CALL(dgemm)("N", "N", &n, &nEta, &qEta, &one, W, &n, 
-		    ranef, &qEta, &zero, etaRanef, &n);
+		    ranef, &qEta, &zero, etaRanef, &n FCONE FCONE);
 
     /* use etaRanefCLM to accelerate computations */
     if (family == 1) {
@@ -943,7 +959,7 @@ SEXP olmm_pred_marg(SEXP x, SEXP eta, SEXP W, SEXP n, SEXP pred) {
 
     /* multiply ranefCholFac with actual nodes */
     F77_CALL(dgemv)("N", &q, &q, &one, ranefCholFac, &q, 
-		    gq_nodes, &i1, &zero, ranefVec, &i1);
+		    gq_nodes, &i1, &zero, ranefVec, &i1 FCONE);
 
     /* ranefVec (vector) to ranef (matrix) */
     for (int i = 0; i < nEta; i++) {
@@ -966,7 +982,7 @@ SEXP olmm_pred_marg(SEXP x, SEXP eta, SEXP W, SEXP n, SEXP pred) {
 
     /* compute contribution of random effects to linear predictor */
     F77_CALL(dgemm)("N", "N", &rn, &nEta, &qEta, &one, rW, &rn, 
-		    ranef, &qEta, &zero, etaRanef, &rn);
+		    ranef, &qEta, &zero, etaRanef, &rn FCONE FCONE);
 
     /* approximate marginal probabilities .................. */
     
@@ -1074,7 +1090,7 @@ SEXP olmm_pred_margNew(SEXP x, SEXP etaNew, SEXP WNew, SEXP subjectNew,
 
     /* multiply ranefCholFac with actual nodes */
     F77_CALL(dgemv)("N", &q, &q, &one, ranefCholFac, &q, 
-		    gq_nodes, &i1, &zero, ranefVec, &i1);
+		    gq_nodes, &i1, &zero, ranefVec, &i1 FCONE);
 
     /* ranefVec (vector) to ranef (matrix) */
     for (int i = 0; i < nEta; i++) {
@@ -1100,10 +1116,10 @@ SEXP olmm_pred_margNew(SEXP x, SEXP etaNew, SEXP WNew, SEXP subjectNew,
 
     /* observation in model */
     F77_CALL(dgemm)("N", "N", &n, &nEta, &qEta, &one, W, &n, 
-		    ranef, &qEta, &zero, etaRanef, &n);
+		    ranef, &qEta, &zero, etaRanef, &n FCONE FCONE);
     /* new observations */
     F77_CALL(dgemm)("N", "N", &rnNew, &nEta, &qEta, &one, rWNew, &rnNew, 
-		    ranef, &qEta, &zero, etaRanefNew, &rnNew);
+		    ranef, &qEta, &zero, etaRanefNew, &rnNew FCONE FCONE);
 
     /* approximate marginal probabilities .................. */
 
